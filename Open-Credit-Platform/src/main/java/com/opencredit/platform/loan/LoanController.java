@@ -54,6 +54,14 @@ public class LoanController {
         return ResponseEntity.ok(ApiResponse.success("Loan application underwritten", response));
     }
 
+    @PostMapping("/{reference}/underwriting/retry")
+    @Operation(summary = "Retry underwriting for an application parked at UNDERWRITING with a REFERRED decision, "
+            + "recording a new underwriting attempt")
+    public ResponseEntity<ApiResponse<LoanResponse>> retryUnderwriting(@PathVariable String reference) {
+        LoanResponse response = loanApplicationService.retryUnderwriting(reference);
+        return ResponseEntity.ok(ApiResponse.success("Underwriting retried", response));
+    }
+
     @PostMapping("/{reference}/sanction")
     @Operation(summary = "Sanction an OFFERED application")
     public ResponseEntity<ApiResponse<LoanResponse>> sanction(@PathVariable String reference) {

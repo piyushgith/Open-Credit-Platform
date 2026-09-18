@@ -16,6 +16,10 @@ import com.opencredit.platform.loan.model.LoanProduct;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
 import com.opencredit.platform.loan.strategy.LoanProcessingStrategy;
 import com.opencredit.platform.loan.support.ApplicationLifecycle;
+import com.opencredit.platform.underwriting.UnderwritingService;
+import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
+import com.opencredit.platform.underwriting.model.UnderwritingAttempt;
+import com.opencredit.platform.underwriting.model.UnderwritingAttemptStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -37,17 +41,20 @@ public class LoanApplicationService {
     private final LoanApplicationRepository repository;
     private final CustomerRepository customerRepository;
     private final LoanProductService loanProductService;
+    private final UnderwritingService underwritingService;
     private final ObjectMapper objectMapper;
 
     public LoanApplicationService(LoanServiceContext loanServiceContext,
                                    LoanApplicationRepository repository,
                                    CustomerRepository customerRepository,
                                    LoanProductService loanProductService,
+                                   UnderwritingService underwritingService,
                                    ObjectMapper objectMapper) {
         this.loanServiceContext = loanServiceContext;
         this.repository = repository;
         this.customerRepository = customerRepository;
         this.loanProductService = loanProductService;
+        this.underwritingService = underwritingService;
         this.objectMapper = objectMapper;
     }
 
@@ -90,10 +97,50 @@ public class LoanApplicationService {
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.UNDERWRITING);
         application.setStatus(ApplicationStatus.UNDERWRITING);
 
+        runUnderwriting(application);
+
+        repository.save(application);
+        return toResponse(application);
+    }
+
+    /**
+     * Re-runs underwriting for an application parked at {@code UNDERWRITING} with a
+     * {@code REFERRED} decision, recording a new {@link UnderwritingAttempt} (next cycle number)
+     * instead of overwriting the referred one. Only reachable from that exact state.
+     */
+    public LoanResponse retryUnderwriting(String referenceNumber) {
+        LoanApplication application = getEntity(referenceNumber);
+
+        if (application.getStatus() != ApplicationStatus.UNDERWRITING
+                || application.getDecision() != DecisionStatus.REFERRED) {
+            throw new UnderwritingNotRetryableException(
+                    referenceNumber, application.getStatus(), application.getDecision());
+        }
+
+        runUnderwriting(application);
+
+        repository.save(application);
+        return toResponse(application);
+    }
+
+    /**
+     * Runs one underwriting attempt for an application already at {@code UNDERWRITING}: starts
+     * an {@link UnderwritingAttempt}, runs the existing {@link LoanProcessingStrategy} unchanged,
+     * completes the attempt with the outcome, and updates the application's decision/status.
+     * Shared by {@link #submit} (the first attempt) and {@link #retryUnderwriting} (later ones).
+     */
+    private void runUnderwriting(LoanApplication application) {
+        UnderwritingAttempt attempt = underwritingService.startAttempt(application.getId(), application.getStatus());
+
         LoanRequest request = objectMapper.convertValue(application.getRequestDetails(), LoanRequest.class);
         LoanProcessingStrategy strategy = loanServiceContext.getStrategy(application.getProductType());
         LoanResponse decision = strategy.processLoan(request);
         decision.setApplicationReference(application.getReferenceNumber());
+
+        underwritingService.completeAttempt(
+                attempt.getId(),
+                UnderwritingAttemptStatus.valueOf(decision.getDecision().name()),
+                toMap(decision));
 
         application.setDecision(decision.getDecision());
         application.setDecisionDetails(toMap(decision));
@@ -105,9 +152,6 @@ public class LoanApplicationService {
             ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.DECLINED);
             application.setStatus(ApplicationStatus.DECLINED);
         }
-
-        repository.save(application);
-        return toResponse(application);
     }
 
     public LoanResponse sanction(String referenceNumber) {

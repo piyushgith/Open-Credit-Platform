@@ -2,12 +2,23 @@ package com.opencredit.platform.common.api;
 
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.exception.DuplicateCustomerException;
+import com.opencredit.platform.document.exception.IllegalDocumentTransitionException;
+import com.opencredit.platform.document.exception.LoanDocumentNotFoundException;
+import com.opencredit.platform.financial.exception.FinancialStatementNotFoundException;
+import com.opencredit.platform.financial.exception.InvalidFinancialPeriodException;
+import com.opencredit.platform.kyc.exception.DuplicateKycCaseException;
+import com.opencredit.platform.kyc.exception.IllegalKycTransitionException;
+import com.opencredit.platform.kyc.exception.KycCaseNotFoundException;
 import com.opencredit.platform.loan.ProductType;
 import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.exception.LoanProductNotFoundException;
 import com.opencredit.platform.loan.exception.UnsupportedProductTypeException;
+import com.opencredit.platform.underwriting.exception.IllegalUnderwritingAttemptTransitionException;
+import com.opencredit.platform.underwriting.exception.InvalidUnderwritingStateException;
+import com.opencredit.platform.underwriting.exception.UnderwritingCaseNotFoundException;
+import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,6 +178,138 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(LoanDocumentNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLoanDocumentNotFound(LoanDocumentNotFoundException ex,
+                                                                          HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "LOAN_DOCUMENT_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(IllegalDocumentTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalDocumentTransition(IllegalDocumentTransitionException ex,
+                                                                               HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "ILLEGAL_DOCUMENT_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(KycCaseNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleKycCaseNotFound(KycCaseNotFoundException ex,
+                                                                      HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "KYC_CASE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateKycCaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateKycCase(DuplicateKycCaseException ex,
+                                                                       HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_KYC_CASE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(IllegalKycTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalKycTransition(IllegalKycTransitionException ex,
+                                                                          HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "ILLEGAL_KYC_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(UnderwritingCaseNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnderwritingCaseNotFound(UnderwritingCaseNotFoundException ex,
+                                                                              HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "UNDERWRITING_CASE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidUnderwritingStateException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidUnderwritingState(InvalidUnderwritingStateException ex,
+                                                                              HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "INVALID_UNDERWRITING_STATE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(UnderwritingNotRetryableException.class)
+    public ResponseEntity<ApiResponse<Void>> handleUnderwritingNotRetryable(UnderwritingNotRetryableException ex,
+                                                                              HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "UNDERWRITING_NOT_RETRYABLE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(IllegalUnderwritingAttemptTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalUnderwritingAttemptTransition(
+            IllegalUnderwritingAttemptTransitionException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "ILLEGAL_UNDERWRITING_ATTEMPT_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(FinancialStatementNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFinancialStatementNotFound(FinancialStatementNotFoundException ex,
+                                                                                 HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "FINANCIAL_STATEMENT_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidFinancialPeriodException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidFinancialPeriod(InvalidFinancialPeriodException ex,
+                                                                             HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "INVALID_FINANCIAL_PERIOD",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)
