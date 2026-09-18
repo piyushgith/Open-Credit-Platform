@@ -39,6 +39,12 @@ public class LoanApplication {
     @Column(name = "reference_number", nullable = false, unique = true)
     private String referenceNumber;
 
+    @Column(name = "customer_id", nullable = false)
+    private UUID customerId;
+
+    @Column(name = "product_id", nullable = false)
+    private UUID productId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "product_type", nullable = false)
     private ProductType productType;
@@ -57,7 +63,7 @@ public class LoanApplication {
     private ApplicationStatus status;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "decision", nullable = false)
+    @Column(name = "decision")
     private DecisionStatus decision;
 
     @JdbcTypeCode(SqlTypes.JSON)
@@ -65,7 +71,7 @@ public class LoanApplication {
     private Map<String, Object> requestDetails;
 
     @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "decision_details", nullable = false, columnDefinition = "jsonb")
+    @Column(name = "decision_details", columnDefinition = "jsonb")
     private Map<String, Object> decisionDetails;
 
     @Column(name = "created_at", nullable = false)

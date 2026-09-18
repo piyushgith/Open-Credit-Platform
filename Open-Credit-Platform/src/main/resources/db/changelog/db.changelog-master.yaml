@@ -2,3 +2,15 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/001-create-loan-application.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/002-create-customer.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/003-create-loan-product.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/004-seed-loan-products.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/005-alter-loan-application-lifecycle.sql
+      relativeToChangelogFile: false

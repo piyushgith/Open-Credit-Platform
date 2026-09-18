@@ -1,7 +1,12 @@
 package com.opencredit.platform.common.api;
 
+import com.opencredit.platform.customer.exception.CustomerNotFoundException;
+import com.opencredit.platform.customer.exception.DuplicateCustomerException;
 import com.opencredit.platform.loan.ProductType;
+import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
+import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
+import com.opencredit.platform.loan.exception.LoanProductNotFoundException;
 import com.opencredit.platform.loan.exception.UnsupportedProductTypeException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -102,6 +107,66 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(CustomerNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCustomerNotFound(CustomerNotFoundException ex,
+                                                                       HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "CUSTOMER_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateCustomerException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCustomer(DuplicateCustomerException ex,
+                                                                        HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_CUSTOMER",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(LoanProductNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLoanProductNotFound(LoanProductNotFoundException ex,
+                                                                          HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "LOAN_PRODUCT_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(LoanProductConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleLoanProductConstraintViolation(
+            LoanProductConstraintViolationException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "PRODUCT_CONSTRAINT_VIOLATION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(IllegalApplicationTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalApplicationTransition(
+            IllegalApplicationTransitionException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "ILLEGAL_APPLICATION_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)

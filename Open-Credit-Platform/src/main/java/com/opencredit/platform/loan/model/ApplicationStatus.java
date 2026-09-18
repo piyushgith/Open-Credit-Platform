@@ -1,9 +1,15 @@
 package com.opencredit.platform.loan.model;
 
 /**
- * Lifecycle status of a {@link LoanApplication}. This first cut only ever reaches
- * {@code PROCESSED} (the full origination lifecycle in my_docs/plan.md is a later stage).
+ * Lifecycle status of a {@link LoanApplication}. Legal transitions are enforced by
+ * {@link com.opencredit.platform.loan.support.ApplicationLifecycle}, not by this enum itself.
  */
 public enum ApplicationStatus {
-    PROCESSED
+    DRAFT,
+    SUBMITTED,
+    UNDERWRITING,
+    OFFERED,
+    DECLINED,
+    SANCTIONED,
+    DISBURSED
 }

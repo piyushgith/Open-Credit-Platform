@@ -2,6 +2,7 @@ package com.opencredit.platform.loan;
 
 import com.opencredit.platform.loan.dto.PersonalLoanResponse;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
+import com.opencredit.platform.loan.model.ApplicationStatus;
 import com.opencredit.platform.loan.model.DecisionStatus;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,6 +14,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -32,7 +34,7 @@ class LoanControllerTest {
     private static final String PERSONAL_REQUEST_JSON = """
             {
               "productType": "PERSONAL",
-              "applicantName": "Piyush Prasad",
+              "customerId": "99999999-9999-9999-9999-999999999999",
               "requestedAmount": 500000.00,
               "tenureMonths": 60,
               "monthlyIncome": 120000.00,
@@ -45,12 +47,7 @@ class LoanControllerTest {
     void applyReturnsCreatedWithSuccessEnvelope() throws Exception {
         PersonalLoanResponse response = new PersonalLoanResponse();
         response.setApplicationReference("LN-00000001");
-        response.setDecision(DecisionStatus.APPROVED);
-        response.setApprovedAmount(new BigDecimal("500000.00"));
-        response.setInterestRate(new BigDecimal("11.5"));
-        response.setMonthlyEmi(new BigDecimal("11000.00"));
-        response.setTenureMonths(60);
-        response.setFoir(new BigDecimal("0.2167"));
+        response.setStatus(ApplicationStatus.DRAFT);
         when(loanApplicationService.apply(any())).thenReturn(response);
 
         mockMvc.perform(post("/api/loans/apply")
@@ -61,6 +58,7 @@ class LoanControllerTest {
                 .andExpect(jsonPath("$.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.productType").value("PERSONAL"))
                 .andExpect(jsonPath("$.data.applicationReference").value("LN-00000001"))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"))
                 .andExpect(jsonPath("$.errors").doesNotExist());
     }
 
@@ -69,7 +67,6 @@ class LoanControllerTest {
         String invalidJson = """
                 {
                   "productType": "PERSONAL",
-                  "applicantName": "",
                   "requestedAmount": -5,
                   "tenureMonths": 2
                 }
@@ -81,7 +78,7 @@ class LoanControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.status").value("ERROR"))
                 .andExpect(jsonPath("$.errors[0].code").value("VALIDATION_ERROR"))
-                .andExpect(jsonPath("$.errors[0].fieldErrors.applicantName").exists())
+                .andExpect(jsonPath("$.errors[0].fieldErrors.customerId").exists())
                 .andExpect(jsonPath("$.data").doesNotExist());
     }
 
@@ -90,7 +87,7 @@ class LoanControllerTest {
         String unknownProductJson = """
                 {
                   "productType": "HOME",
-                  "applicantName": "X",
+                  "customerId": "99999999-9999-9999-9999-999999999999",
                   "requestedAmount": 100000,
                   "tenureMonths": 12
                 }
@@ -113,8 +110,27 @@ class LoanControllerTest {
     }
 
     @Test
+    void submitReturnsOkWithDecisionEnvelope() throws Exception {
+        PersonalLoanResponse response = new PersonalLoanResponse();
+        response.setApplicationReference("LN-00000001");
+        response.setStatus(ApplicationStatus.OFFERED);
+        response.setDecision(DecisionStatus.APPROVED);
+        response.setApprovedAmount(new BigDecimal("500000.00"));
+        response.setInterestRate(new BigDecimal("11.5"));
+        response.setMonthlyEmi(new BigDecimal("11000.00"));
+        response.setTenureMonths(60);
+        response.setFoir(new BigDecimal("0.2167"));
+        when(loanApplicationService.submit(eq("LN-00000001"))).thenReturn(response);
+
+        mockMvc.perform(post("/api/loans/LN-00000001/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("OFFERED"))
+                .andExpect(jsonPath("$.data.decision").value("APPROVED"));
+    }
+
+    @Test
     void getByReferenceReturnsNotFoundWhenMissing() throws Exception {
-        when(loanApplicationService.findByReference("LN-99999999"))
+        when(loanApplicationService.getResponse("LN-99999999"))
                 .thenThrow(new LoanApplicationNotFoundException("LN-99999999"));
 
         mockMvc.perform(get("/api/loans/LN-99999999"))

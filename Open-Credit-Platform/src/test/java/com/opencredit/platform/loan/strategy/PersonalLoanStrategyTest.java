@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -30,7 +31,7 @@ class PersonalLoanStrategyTest {
 
     private PersonalLoanRequest request(EmploymentType employmentType, BigDecimal monthlyIncome, BigDecimal existingEmi) {
         PersonalLoanRequest request = new PersonalLoanRequest();
-        request.setApplicantName("Test Applicant");
+        request.setCustomerId(UUID.randomUUID());
         request.setRequestedAmount(new BigDecimal("500000"));
         request.setTenureMonths(60);
         request.setEmploymentType(employmentType);

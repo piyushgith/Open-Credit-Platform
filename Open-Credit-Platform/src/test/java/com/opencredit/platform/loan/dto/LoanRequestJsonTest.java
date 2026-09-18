@@ -27,7 +27,7 @@ class LoanRequestJsonTest {
         String json = """
                 {
                   "productType": "PERSONAL",
-                  "applicantName": "Piyush Prasad",
+                  "customerId": "99999999-9999-9999-9999-999999999999",
                   "requestedAmount": 500000.00,
                   "tenureMonths": 60,
                   "monthlyIncome": 120000.00,
@@ -48,7 +48,7 @@ class LoanRequestJsonTest {
         String json = """
                 {
                   "productType": "VEHICLE",
-                  "applicantName": "Piyush Prasad",
+                  "customerId": "99999999-9999-9999-9999-999999999999",
                   "requestedAmount": 800000.00,
                   "tenureMonths": 48,
                   "vehicleMake": "Honda",
@@ -70,7 +70,7 @@ class LoanRequestJsonTest {
         String json = """
                 {
                   "productType": "HOME",
-                  "applicantName": "X",
+                  "customerId": "99999999-9999-9999-9999-999999999999",
                   "requestedAmount": 100000,
                   "tenureMonths": 12
                 }

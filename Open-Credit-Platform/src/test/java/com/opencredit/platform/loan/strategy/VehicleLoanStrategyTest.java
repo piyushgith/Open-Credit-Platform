@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,7 +27,7 @@ class VehicleLoanStrategyTest {
 
     private VehicleLoanRequest request(VehicleCondition condition, String vehiclePrice, String requestedAmount, String downPayment) {
         VehicleLoanRequest request = new VehicleLoanRequest();
-        request.setApplicantName("Test Applicant");
+        request.setCustomerId(UUID.randomUUID());
         request.setTenureMonths(48);
         request.setCondition(condition);
         request.setVehiclePrice(new BigDecimal(vehiclePrice));

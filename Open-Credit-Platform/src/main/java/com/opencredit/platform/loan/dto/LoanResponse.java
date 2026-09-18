@@ -3,6 +3,7 @@ package com.opencredit.platform.loan.dto;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.opencredit.platform.loan.ProductType;
+import com.opencredit.platform.loan.model.ApplicationStatus;
 import com.opencredit.platform.loan.model.DecisionStatus;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -36,6 +37,7 @@ import java.util.List;
 public abstract class LoanResponse {
 
     private String applicationReference;
+    private ApplicationStatus status;
     private DecisionStatus decision;
     private BigDecimal approvedAmount;
     private BigDecimal interestRate;

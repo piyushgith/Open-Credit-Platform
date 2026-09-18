@@ -6,11 +6,11 @@ import com.opencredit.platform.loan.ProductType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 import java.math.BigDecimal;
+import java.util.UUID;
 
 /**
  * Base type for all loan application requests. The {@code productType} JSON field
@@ -31,8 +31,8 @@ import java.math.BigDecimal;
 @Data
 public abstract class LoanRequest {
 
-    @NotBlank
-    private String applicantName;
+    @NotNull
+    private UUID customerId;
 
     @NotNull
     @DecimalMin(value = "10000.00", message = "requestedAmount must be at least 10000.00")
