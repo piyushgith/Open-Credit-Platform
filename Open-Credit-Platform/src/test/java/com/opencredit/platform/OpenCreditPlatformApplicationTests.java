@@ -1,4 +1,4 @@
-package org.open.credit.app;
+package com.opencredit.platform;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
