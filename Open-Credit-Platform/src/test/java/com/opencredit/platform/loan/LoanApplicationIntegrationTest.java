@@ -368,8 +368,10 @@ class LoanApplicationIntegrationTest {
                     { "lineItemCode": "NON_CURRENT_ASSETS", "value": 300000.00 },
                     { "lineItemCode": "CURRENT_LIABILITIES", "value": 200000.00 },
                     { "lineItemCode": "NON_CURRENT_LIABILITIES", "value": 150000.00 },
+                    { "lineItemCode": "EQUITY", "value": 400000.00 },
                     { "lineItemCode": "LONG_TERM_DEBT", "value": 100000.00 },
                     { "lineItemCode": "SHORT_TERM_DEBT", "value": 50000.00 },
+                    { "lineItemCode": "INVENTORY", "value": 100000.00 },
                     { "lineItemCode": "REVENUE", "value": 1000000.00 },
                     { "lineItemCode": "COST_OF_GOODS_SOLD", "value": 600000.00 },
                     { "lineItemCode": "OPERATING_EXPENSES", "value": 150000.00 },
@@ -385,7 +387,7 @@ class LoanApplicationIntegrationTest {
                         .content(statementJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.period.periodLabel").value("FY2023"))
-                .andExpect(jsonPath("$.data.lineItems.length()").value(12))
+                .andExpect(jsonPath("$.data.lineItems.length()").value(14))
                 .andReturn().getResponse().getContentAsString();
 
         String statementId = submitResponseJson.split("\"id\":\"")[1].split("\"")[0];
@@ -403,7 +405,26 @@ class LoanApplicationIntegrationTest {
                 .andExpect(jsonPath("$.data.facts[6].factCode").value("EBITDA"))
                 .andExpect(jsonPath("$.data.facts[6].value").value(290000.0))
                 .andExpect(jsonPath("$.data.facts[7].factCode").value("NET_PROFIT"))
-                .andExpect(jsonPath("$.data.facts[7].value").value(200000.0));
+                .andExpect(jsonPath("$.data.facts[7].value").value(200000.0))
+                // All 11 FinancialRatioCode ratios are computable from this statement's line items.
+                .andExpect(jsonPath("$.data.ratios.length()").value(11))
+                .andExpect(jsonPath("$.data.ratios[0].ratioCode").value("CURRENT_RATIO"))
+                .andExpect(jsonPath("$.data.ratios[0].category").value("LIQUIDITY"))
+                .andExpect(jsonPath("$.data.ratios[0].value").value(2.5))
+                .andExpect(jsonPath("$.data.ratios[10].ratioCode").value("DSCR"))
+                .andExpect(jsonPath("$.data.ratios[10].value").value(4.1429))
+                // No previous period exists yet, so DECLINING_REVENUE/DECLINING_EBITDA are skipped.
+                // EnumMap order of the remaining four: NEGATIVE_CASH_FLOW(0), HIGH_LEVERAGE(1),
+                // LOW_LIQUIDITY(2), WEAK_INTEREST_COVERAGE(3) — none triggered for this statement.
+                .andExpect(jsonPath("$.data.riskIndicators.length()").value(4))
+                .andExpect(jsonPath("$.data.riskIndicators[0].indicatorCode").value("NEGATIVE_CASH_FLOW"))
+                .andExpect(jsonPath("$.data.riskIndicators[0].triggered").value(false))
+                .andExpect(jsonPath("$.data.riskIndicators[1].indicatorCode").value("HIGH_LEVERAGE"))
+                .andExpect(jsonPath("$.data.riskIndicators[1].triggered").value(false))
+                .andExpect(jsonPath("$.data.riskIndicators[2].indicatorCode").value("LOW_LIQUIDITY"))
+                .andExpect(jsonPath("$.data.riskIndicators[2].triggered").value(false))
+                .andExpect(jsonPath("$.data.riskIndicators[3].indicatorCode").value("WEAK_INTEREST_COVERAGE"))
+                .andExpect(jsonPath("$.data.riskIndicators[3].triggered").value(false));
 
         mockMvc.perform(post("/api/loans/" + reference + "/financial-statements/" + statementId + "/analyze"))
                 .andExpect(status().isOk());
@@ -411,6 +432,85 @@ class LoanApplicationIntegrationTest {
         mockMvc.perform(get("/api/loans/" + reference + "/financial-statements/" + statementId + "/analysis"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.length()").value(2));
+    }
+
+    /**
+     * DECLINING_REVENUE/DECLINING_EBITDA compare against the immediately preceding period for the
+     * same application. The FY2024 statement's revenue (900000) and EBITDA (190000, derived from
+     * 900000 - 600000 COGS - 150000 opex + 40000 D&A) are both below FY2023's (1000000 / 290000),
+     * so analyzing FY2024 must trigger both.
+     */
+    @Test
+    void decliningRevenueAndEbitdaRiskIndicatorsCompareAgainstThePreviousFinancialPeriod() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        String firstStatementJson = """
+                {
+                  "period": {
+                    "periodLabel": "FY2023",
+                    "periodType": "AUDITED",
+                    "startDate": "2022-04-01",
+                    "endDate": "2023-03-31"
+                  },
+                  "lineItems": [
+                    { "lineItemCode": "REVENUE", "value": 1000000.00 },
+                    { "lineItemCode": "COST_OF_GOODS_SOLD", "value": 600000.00 },
+                    { "lineItemCode": "OPERATING_EXPENSES", "value": 150000.00 },
+                    { "lineItemCode": "DEPRECIATION_AMORTIZATION", "value": 40000.00 },
+                    { "lineItemCode": "INTEREST_EXPENSE", "value": 20000.00 },
+                    { "lineItemCode": "TAX_EXPENSE", "value": 30000.00 }
+                  ]
+                }
+                """;
+
+        String firstResponseJson = mockMvc.perform(post("/api/loans/" + reference + "/financial-statements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(firstStatementJson))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String firstStatementId = firstResponseJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/financial-statements/" + firstStatementId + "/analyze"))
+                .andExpect(status().isOk());
+
+        String secondStatementJson = """
+                {
+                  "period": {
+                    "periodLabel": "FY2024",
+                    "periodType": "AUDITED",
+                    "startDate": "2023-04-01",
+                    "endDate": "2024-03-31"
+                  },
+                  "lineItems": [
+                    { "lineItemCode": "REVENUE", "value": 900000.00 },
+                    { "lineItemCode": "COST_OF_GOODS_SOLD", "value": 600000.00 },
+                    { "lineItemCode": "OPERATING_EXPENSES", "value": 150000.00 },
+                    { "lineItemCode": "DEPRECIATION_AMORTIZATION", "value": 40000.00 },
+                    { "lineItemCode": "INTEREST_EXPENSE", "value": 20000.00 },
+                    { "lineItemCode": "TAX_EXPENSE", "value": 30000.00 }
+                  ]
+                }
+                """;
+
+        String secondResponseJson = mockMvc.perform(post("/api/loans/" + reference + "/financial-statements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(secondStatementJson))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String secondStatementId = secondResponseJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/financial-statements/" + secondStatementId + "/analyze"))
+                .andExpect(status().isOk())
+                // EnumMap order: DECLINING_REVENUE(0), DECLINING_EBITDA(1), NEGATIVE_CASH_FLOW(2),
+                // WEAK_INTEREST_COVERAGE(3) — HIGH_LEVERAGE/LOW_LIQUIDITY are skipped since this
+                // statement carries no balance-sheet line items.
+                .andExpect(jsonPath("$.data.riskIndicators.length()").value(4))
+                .andExpect(jsonPath("$.data.riskIndicators[0].indicatorCode").value("DECLINING_REVENUE"))
+                .andExpect(jsonPath("$.data.riskIndicators[0].triggered").value(true))
+                .andExpect(jsonPath("$.data.riskIndicators[1].indicatorCode").value("DECLINING_EBITDA"))
+                .andExpect(jsonPath("$.data.riskIndicators[1].triggered").value(true));
     }
 
     @Test

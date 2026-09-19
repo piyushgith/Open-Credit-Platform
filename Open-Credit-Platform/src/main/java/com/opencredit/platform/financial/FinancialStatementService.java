@@ -5,8 +5,10 @@ import com.opencredit.platform.financial.dto.FinancialAnalysisRunResponse;
 import com.opencredit.platform.financial.dto.FinancialLineItemResponse;
 import com.opencredit.platform.financial.dto.FinancialPeriodRequest;
 import com.opencredit.platform.financial.dto.FinancialPeriodResponse;
+import com.opencredit.platform.financial.dto.FinancialRatioResponse;
 import com.opencredit.platform.financial.dto.FinancialStatementRequest;
 import com.opencredit.platform.financial.dto.FinancialStatementResponse;
+import com.opencredit.platform.financial.dto.RiskIndicatorResponse;
 import com.opencredit.platform.financial.exception.FinancialStatementNotFoundException;
 import com.opencredit.platform.financial.exception.InvalidFinancialPeriodException;
 import com.opencredit.platform.financial.model.DerivedFinancialFact;
@@ -15,13 +17,22 @@ import com.opencredit.platform.financial.model.FinancialAnalysisRun;
 import com.opencredit.platform.financial.model.FinancialLineItem;
 import com.opencredit.platform.financial.model.FinancialLineItemCode;
 import com.opencredit.platform.financial.model.FinancialPeriod;
+import com.opencredit.platform.financial.model.FinancialRatio;
+import com.opencredit.platform.financial.model.FinancialRatioCode;
 import com.opencredit.platform.financial.model.FinancialStatement;
+import com.opencredit.platform.financial.model.RiskIndicator;
+import com.opencredit.platform.financial.model.RiskIndicatorCode;
 import com.opencredit.platform.financial.repository.DerivedFinancialFactRepository;
 import com.opencredit.platform.financial.repository.FinancialAnalysisRunRepository;
 import com.opencredit.platform.financial.repository.FinancialLineItemRepository;
 import com.opencredit.platform.financial.repository.FinancialPeriodRepository;
+import com.opencredit.platform.financial.repository.FinancialRatioRepository;
 import com.opencredit.platform.financial.repository.FinancialStatementRepository;
+import com.opencredit.platform.financial.repository.RiskIndicatorRepository;
 import com.opencredit.platform.financial.support.DerivedFactCalculator;
+import com.opencredit.platform.financial.support.RatioCalculator;
+import com.opencredit.platform.financial.support.RiskIndicatorEvaluator;
+import com.opencredit.platform.financial.support.RiskIndicatorEvaluator.PreviousPeriodFacts;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.model.LoanApplication;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
@@ -30,8 +41,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -50,23 +63,35 @@ public class FinancialStatementService {
     private final FinancialLineItemRepository lineItemRepository;
     private final FinancialAnalysisRunRepository runRepository;
     private final DerivedFinancialFactRepository factRepository;
+    private final FinancialRatioRepository ratioRepository;
+    private final RiskIndicatorRepository riskIndicatorRepository;
     private final LoanApplicationRepository loanApplicationRepository;
     private final DerivedFactCalculator calculator;
+    private final RatioCalculator ratioCalculator;
+    private final RiskIndicatorEvaluator riskIndicatorEvaluator;
 
     public FinancialStatementService(FinancialPeriodRepository periodRepository,
                                       FinancialStatementRepository statementRepository,
                                       FinancialLineItemRepository lineItemRepository,
                                       FinancialAnalysisRunRepository runRepository,
                                       DerivedFinancialFactRepository factRepository,
+                                      FinancialRatioRepository ratioRepository,
+                                      RiskIndicatorRepository riskIndicatorRepository,
                                       LoanApplicationRepository loanApplicationRepository,
-                                      DerivedFactCalculator calculator) {
+                                      DerivedFactCalculator calculator,
+                                      RatioCalculator ratioCalculator,
+                                      RiskIndicatorEvaluator riskIndicatorEvaluator) {
         this.periodRepository = periodRepository;
         this.statementRepository = statementRepository;
         this.lineItemRepository = lineItemRepository;
         this.runRepository = runRepository;
         this.factRepository = factRepository;
+        this.ratioRepository = ratioRepository;
+        this.riskIndicatorRepository = riskIndicatorRepository;
         this.loanApplicationRepository = loanApplicationRepository;
         this.calculator = calculator;
+        this.ratioCalculator = ratioCalculator;
+        this.riskIndicatorEvaluator = riskIndicatorEvaluator;
     }
 
     public FinancialStatementResponse submit(String referenceNumber, FinancialStatementRequest request) {
@@ -124,6 +149,10 @@ public class FinancialStatementService {
         Map<FinancialLineItemCode, BigDecimal> rawValues = lineItems.stream()
                 .collect(Collectors.toMap(FinancialLineItem::getLineItemCode, FinancialLineItem::getValue));
         Map<DerivedFinancialFactCode, BigDecimal> facts = calculator.calculate(rawValues);
+        Map<FinancialRatioCode, BigDecimal> ratios = ratioCalculator.calculate(rawValues, facts);
+        PreviousPeriodFacts previousPeriod = previousPeriodComparison(statement);
+        Map<RiskIndicatorCode, Boolean> riskIndicators =
+                riskIndicatorEvaluator.evaluate(ratios, facts, rawValues, previousPeriod);
 
         FinancialAnalysisRun run = runRepository.save(FinancialAnalysisRun.builder()
                 .id(UUID.randomUUID())
@@ -142,15 +171,84 @@ public class FinancialStatementService {
                 .toList();
         factRepository.saveAll(factRows);
 
-        return toRunResponse(run, factRows);
+        List<FinancialRatio> ratioRows = ratios.entrySet().stream()
+                .map(entry -> FinancialRatio.builder()
+                        .id(UUID.randomUUID())
+                        .analysisRunId(run.getId())
+                        .ratioCode(entry.getKey())
+                        .category(entry.getKey().getCategory())
+                        .value(entry.getValue())
+                        .createdAt(Instant.now())
+                        .build())
+                .toList();
+        ratioRepository.saveAll(ratioRows);
+
+        List<RiskIndicator> riskIndicatorRows = riskIndicators.entrySet().stream()
+                .map(entry -> RiskIndicator.builder()
+                        .id(UUID.randomUUID())
+                        .analysisRunId(run.getId())
+                        .indicatorCode(entry.getKey())
+                        .triggered(entry.getValue())
+                        .createdAt(Instant.now())
+                        .build())
+                .toList();
+        riskIndicatorRepository.saveAll(riskIndicatorRows);
+
+        return toRunResponse(run, factRows, ratioRows, riskIndicatorRows);
     }
 
     @Transactional(readOnly = true)
     public List<FinancialAnalysisRunResponse> getAnalysisRuns(String referenceNumber, UUID statementId) {
         FinancialStatement statement = getStatement(referenceNumber, statementId);
         return runRepository.findAllByStatementIdOrderByRunAtAsc(statement.getId()).stream()
-                .map(run -> toRunResponse(run, factRepository.findAllByAnalysisRunId(run.getId())))
+                .map(run -> toRunResponse(run,
+                        factRepository.findAllByAnalysisRunId(run.getId()),
+                        ratioRepository.findAllByAnalysisRunId(run.getId()),
+                        riskIndicatorRepository.findAllByAnalysisRunId(run.getId())))
                 .toList();
+    }
+
+    /**
+     * Finds the immediately preceding financial period for the same loan application (by
+     * {@code endDate}, excluding the statement being analyzed) and returns its raw revenue plus
+     * its most recent analysis run's EBITDA fact, if any. Empty fields when there is no earlier
+     * statement or it has never been analyzed — the two comparative risk indicators then simply
+     * aren't evaluated, same as any other missing input.
+     */
+    private PreviousPeriodFacts previousPeriodComparison(FinancialStatement statement) {
+        List<FinancialStatement> applicationStatements =
+                statementRepository.findAllByApplicationId(statement.getApplicationId());
+        Map<UUID, FinancialPeriod> periodsById = periodRepository
+                .findAllById(applicationStatements.stream().map(FinancialStatement::getPeriodId).toList())
+                .stream()
+                .collect(Collectors.toMap(FinancialPeriod::getId, period -> period));
+        FinancialPeriod currentPeriod = periodsById.get(statement.getPeriodId());
+
+        Optional<FinancialStatement> previousStatement = applicationStatements.stream()
+                .filter(other -> !other.getId().equals(statement.getId()))
+                .filter(other -> periodsById.get(other.getPeriodId()).getEndDate().isBefore(currentPeriod.getEndDate()))
+                .max(Comparator.comparing(other -> periodsById.get(other.getPeriodId()).getEndDate()));
+
+        if (previousStatement.isEmpty()) {
+            return PreviousPeriodFacts.none();
+        }
+
+        Optional<BigDecimal> previousRevenue = lineItemRepository.findAllByStatementId(previousStatement.get().getId())
+                .stream()
+                .filter(item -> item.getLineItemCode() == FinancialLineItemCode.REVENUE)
+                .map(FinancialLineItem::getValue)
+                .findFirst();
+
+        List<FinancialAnalysisRun> previousRuns =
+                runRepository.findAllByStatementIdOrderByRunAtAsc(previousStatement.get().getId());
+        Optional<BigDecimal> previousEbitda = previousRuns.isEmpty()
+                ? Optional.empty()
+                : factRepository.findAllByAnalysisRunId(previousRuns.getLast().getId()).stream()
+                        .filter(fact -> fact.getFactCode() == DerivedFinancialFactCode.EBITDA)
+                        .map(DerivedFinancialFact::getValue)
+                        .findFirst();
+
+        return new PreviousPeriodFacts(previousRevenue, previousEbitda);
     }
 
     private void assertValidPeriod(FinancialPeriodRequest period) {
@@ -200,7 +298,9 @@ public class FinancialStatementService {
                 .build();
     }
 
-    private FinancialAnalysisRunResponse toRunResponse(FinancialAnalysisRun run, List<DerivedFinancialFact> facts) {
+    private FinancialAnalysisRunResponse toRunResponse(FinancialAnalysisRun run, List<DerivedFinancialFact> facts,
+                                                         List<FinancialRatio> ratios,
+                                                         List<RiskIndicator> riskIndicators) {
         return FinancialAnalysisRunResponse.builder()
                 .id(run.getId())
                 .statementId(run.getStatementId())
@@ -210,6 +310,21 @@ public class FinancialStatementService {
                                 .id(fact.getId())
                                 .factCode(fact.getFactCode())
                                 .value(fact.getValue())
+                                .build())
+                        .toList())
+                .ratios(ratios.stream()
+                        .map(ratio -> FinancialRatioResponse.builder()
+                                .id(ratio.getId())
+                                .ratioCode(ratio.getRatioCode())
+                                .category(ratio.getCategory())
+                                .value(ratio.getValue())
+                                .build())
+                        .toList())
+                .riskIndicators(riskIndicators.stream()
+                        .map(indicator -> RiskIndicatorResponse.builder()
+                                .id(indicator.getId())
+                                .indicatorCode(indicator.getIndicatorCode())
+                                .triggered(indicator.isTriggered())
                                 .build())
                         .toList())
                 .build();

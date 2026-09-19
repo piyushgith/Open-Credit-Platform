@@ -19,4 +19,6 @@ public class FinancialAnalysisRunResponse {
     private UUID statementId;
     private Instant runAt;
     private List<DerivedFinancialFactResponse> facts;
+    private List<FinancialRatioResponse> ratios;
+    private List<RiskIndicatorResponse> riskIndicators;
 }

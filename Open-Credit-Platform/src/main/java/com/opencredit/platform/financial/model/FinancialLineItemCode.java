@@ -18,5 +18,6 @@ public enum FinancialLineItemCode {
     INTEREST_EXPENSE,
     TAX_EXPENSE,
     LONG_TERM_DEBT,
-    SHORT_TERM_DEBT
+    SHORT_TERM_DEBT,
+    INVENTORY
 }
