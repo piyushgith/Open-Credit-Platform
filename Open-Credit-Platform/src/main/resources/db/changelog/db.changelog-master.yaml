@@ -89,3 +89,15 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/030-create-approval-decision.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/031-create-offer.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/032-create-sanction.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/033-create-disbursement.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/034-create-disbursement-tranche.sql
+      relativeToChangelogFile: false

@@ -1,6 +1,8 @@
 package com.opencredit.platform.loan;
 
 import com.opencredit.platform.common.api.ApiResponse;
+import com.opencredit.platform.disbursement.dto.DisbursementTrancheRequest;
+import com.opencredit.platform.disbursement.dto.DisbursementTrancheResponse;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -69,11 +71,14 @@ public class LoanController {
         return ResponseEntity.ok(ApiResponse.success("Loan application sanctioned", response));
     }
 
-    @PostMapping("/{reference}/disburse")
-    @Operation(summary = "Disburse a SANCTIONED application")
-    public ResponseEntity<ApiResponse<LoanResponse>> disburse(@PathVariable String reference) {
-        LoanResponse response = loanApplicationService.disburse(reference);
-        return ResponseEntity.ok(ApiResponse.success("Loan disbursed", response));
+    @PostMapping("/{reference}/disbursements")
+    @Operation(summary = "Record a disbursement tranche against a SANCTIONED application's sanction",
+            description = "The application moves to DISBURSED once the running total across every tranche "
+                    + "reaches the sanctioned amount; earlier tranches leave it at SANCTIONED.")
+    public ResponseEntity<ApiResponse<DisbursementTrancheResponse>> disburse(
+            @PathVariable String reference, @Valid @RequestBody DisbursementTrancheRequest request) {
+        DisbursementTrancheResponse response = loanApplicationService.disburse(reference, request);
+        return ResponseEntity.ok(ApiResponse.success("Disbursement tranche recorded", response));
     }
 
     @GetMapping("/{reference}")

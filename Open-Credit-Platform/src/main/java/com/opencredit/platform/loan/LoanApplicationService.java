@@ -3,10 +3,15 @@ package com.opencredit.platform.loan;
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.model.Customer;
 import com.opencredit.platform.customer.repository.CustomerRepository;
+import com.opencredit.platform.disbursement.DisbursementService;
+import com.opencredit.platform.disbursement.dto.DisbursementTrancheRequest;
+import com.opencredit.platform.disbursement.dto.DisbursementTrancheResponse;
+import com.opencredit.platform.disbursement.model.DisbursementStatus;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
 import com.opencredit.platform.loan.dto.PersonalLoanResponse;
 import com.opencredit.platform.loan.dto.VehicleLoanResponse;
+import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.model.ApplicationStatus;
@@ -16,6 +21,7 @@ import com.opencredit.platform.loan.model.LoanProduct;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
 import com.opencredit.platform.loan.strategy.LoanProcessingStrategy;
 import com.opencredit.platform.loan.support.ApplicationLifecycle;
+import com.opencredit.platform.offer.OfferService;
 import com.opencredit.platform.underwriting.UnderwritingService;
 import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
 import com.opencredit.platform.underwriting.model.UnderwritingAttempt;
@@ -42,6 +48,8 @@ public class LoanApplicationService {
     private final CustomerRepository customerRepository;
     private final LoanProductService loanProductService;
     private final UnderwritingService underwritingService;
+    private final OfferService offerService;
+    private final DisbursementService disbursementService;
     private final ObjectMapper objectMapper;
 
     public LoanApplicationService(LoanServiceContext loanServiceContext,
@@ -49,12 +57,16 @@ public class LoanApplicationService {
                                    CustomerRepository customerRepository,
                                    LoanProductService loanProductService,
                                    UnderwritingService underwritingService,
+                                   OfferService offerService,
+                                   DisbursementService disbursementService,
                                    ObjectMapper objectMapper) {
         this.loanServiceContext = loanServiceContext;
         this.repository = repository;
         this.customerRepository = customerRepository;
         this.loanProductService = loanProductService;
         this.underwritingService = underwritingService;
+        this.offerService = offerService;
+        this.disbursementService = disbursementService;
         this.objectMapper = objectMapper;
     }
 
@@ -154,20 +166,46 @@ public class LoanApplicationService {
         }
     }
 
+    /**
+     * Sanctions the offer the customer selected via {@code OfferController.select}. Validates the
+     * transition first (preserving the pre-existing "sanction before submit is an illegal
+     * transition" behavior) before asking {@link OfferService} for the domain result — a missing
+     * selection surfaces as {@code NoOfferSelectedException}, not as a transition error.
+     */
     public LoanResponse sanction(String referenceNumber) {
         LoanApplication application = getEntity(referenceNumber);
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.SANCTIONED);
+
+        offerService.sanctionSelectedOffer(application.getId());
+
         application.setStatus(ApplicationStatus.SANCTIONED);
         repository.save(application);
         return toResponse(application);
     }
 
-    public LoanResponse disburse(String referenceNumber) {
+    /**
+     * Records one disbursement tranche. Unlike {@link #sanction}, the {@code SANCTIONED ->
+     * DISBURSED} transition only fires once {@link DisbursementService} reports the running total
+     * has reached the sanctioned amount; earlier tranches leave the application at
+     * {@code SANCTIONED} so further tranches remain possible.
+     */
+    public DisbursementTrancheResponse disburse(String referenceNumber, DisbursementTrancheRequest request) {
         LoanApplication application = getEntity(referenceNumber);
-        ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.DISBURSED);
-        application.setStatus(ApplicationStatus.DISBURSED);
-        repository.save(application);
-        return toResponse(application);
+        if (application.getStatus() != ApplicationStatus.SANCTIONED) {
+            throw new IllegalApplicationTransitionException(application.getStatus(), ApplicationStatus.DISBURSED);
+        }
+
+        DisbursementTrancheResponse response = disbursementService.recordTranche(application.getId(), request);
+
+        if (response.getDisbursementStatus() == DisbursementStatus.COMPLETED) {
+            ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.DISBURSED);
+            application.setStatus(ApplicationStatus.DISBURSED);
+            repository.save(application);
+        }
+
+        response.setApplicationReference(referenceNumber);
+        response.setApplicationStatus(application.getStatus());
+        return response;
     }
 
     @Transactional(readOnly = true)

@@ -11,6 +11,11 @@ import com.opencredit.platform.authority.exception.NoMatchingAuthorityMatrixEntr
 import com.opencredit.platform.authority.exception.SelfApprovalException;
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.exception.DuplicateCustomerException;
+import com.opencredit.platform.disbursement.exception.ConcurrentDisbursementConflictException;
+import com.opencredit.platform.disbursement.exception.DisbursementAlreadyCompletedException;
+import com.opencredit.platform.disbursement.exception.DisbursementExceedsSanctionedAmountException;
+import com.opencredit.platform.disbursement.exception.DisbursementNotFoundException;
+import com.opencredit.platform.disbursement.exception.DuplicateDisbursementRequestException;
 import com.opencredit.platform.decision.exception.CreditDecisionNotFoundException;
 import com.opencredit.platform.decision.exception.CreditPolicyInUseException;
 import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
@@ -33,6 +38,13 @@ import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.exception.LoanProductNotFoundException;
 import com.opencredit.platform.loan.exception.UnsupportedProductTypeException;
+import com.opencredit.platform.offer.exception.DuplicateSanctionException;
+import com.opencredit.platform.offer.exception.NoOfferSelectedException;
+import com.opencredit.platform.offer.exception.OfferAlreadySelectedException;
+import com.opencredit.platform.offer.exception.OfferNotEligibleException;
+import com.opencredit.platform.offer.exception.OfferNotEligibleForSelectionException;
+import com.opencredit.platform.offer.exception.OfferNotFoundException;
+import com.opencredit.platform.offer.exception.SanctionNotFoundException;
 import com.opencredit.platform.scoring.exception.DuplicateScoreException;
 import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
@@ -669,6 +681,150 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.of(
                 HttpStatus.CONFLICT,
                 "CONCURRENT_APPROVAL_CONFLICT",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OfferNotEligibleException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOfferNotEligible(OfferNotEligibleException ex,
+                                                                       HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "OFFER_NOT_ELIGIBLE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OfferNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOfferNotFound(OfferNotFoundException ex,
+                                                                     HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "OFFER_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OfferNotEligibleForSelectionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOfferNotEligibleForSelection(
+            OfferNotEligibleForSelectionException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "OFFER_NOT_ELIGIBLE_FOR_SELECTION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OfferAlreadySelectedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOfferAlreadySelected(OfferAlreadySelectedException ex,
+                                                                           HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "OFFER_ALREADY_SELECTED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(NoOfferSelectedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoOfferSelected(NoOfferSelectedException ex,
+                                                                       HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "NO_OFFER_SELECTED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateSanctionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateSanction(DuplicateSanctionException ex,
+                                                                        HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_SANCTION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(SanctionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSanctionNotFound(SanctionNotFoundException ex,
+                                                                       HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "SANCTION_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DisbursementNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDisbursementNotFound(DisbursementNotFoundException ex,
+                                                                           HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "DISBURSEMENT_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DisbursementAlreadyCompletedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDisbursementAlreadyCompleted(
+            DisbursementAlreadyCompletedException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DISBURSEMENT_ALREADY_COMPLETED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DisbursementExceedsSanctionedAmountException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDisbursementExceedsSanctionedAmount(
+            DisbursementExceedsSanctionedAmountException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "DISBURSEMENT_EXCEEDS_SANCTIONED_AMOUNT",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateDisbursementRequestException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateDisbursementRequest(
+            DuplicateDisbursementRequestException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_DISBURSEMENT_REQUEST",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ConcurrentDisbursementConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentDisbursementConflict(
+            ConcurrentDisbursementConflictException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_DISBURSEMENT_CONFLICT",
                 ex.getMessage(),
                 request.getRequestURI()
         );

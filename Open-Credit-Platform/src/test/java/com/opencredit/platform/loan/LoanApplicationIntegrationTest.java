@@ -112,13 +112,168 @@ class LoanApplicationIntegrationTest {
                 .andExpect(jsonPath("$.data.decision").value("APPROVED"))
                 .andExpect(jsonPath("$.data.foir").exists());
 
+        String offerResponseJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.offerAmount").value(500000.00))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"))
+                .andReturn().getResponse().getContentAsString();
+        String offerId = offerResponseJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SELECTED"));
+
         mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SANCTIONED"));
 
-        mockMvc.perform(post("/api/loans/" + reference + "/disburse"))
+        mockMvc.perform(get("/api/loans/" + reference + "/sanction"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sanctionedAmount").value(500000.00));
+
+        mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 300000.00, \"requestReference\": \"TRANCHE-1\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicationStatus").value("SANCTIONED"))
+                .andExpect(jsonPath("$.data.trancheNumber").value(1))
+                .andExpect(jsonPath("$.data.disbursementStatus").value("IN_PROGRESS"));
+
+        mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 200000.00, \"requestReference\": \"TRANCHE-2\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.applicationStatus").value("DISBURSED"))
+                .andExpect(jsonPath("$.data.trancheNumber").value(2))
+                .andExpect(jsonPath("$.data.disbursementStatus").value("COMPLETED"));
+
+        mockMvc.perform(get("/api/loans/" + reference + "/disbursements"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.disbursedTotal").value(500000.00))
+                .andExpect(jsonPath("$.data.tranches.length()").value(2));
+
+        mockMvc.perform(get("/api/loans/" + reference))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("DISBURSED"));
+    }
+
+    @Test
+    void offerCannotBeCreatedBeforeUnderwritingApproves() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("OFFER_NOT_ELIGIBLE"));
+    }
+
+    @Test
+    void secondOfferCannotBeSelectedOnceOneIsAlreadySelected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.decision").value("APPROVED"));
+
+        String firstOfferJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String firstOfferId = firstOfferJson.split("\"id\":\"")[1].split("\"")[0];
+
+        String secondOfferJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 48}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String secondOfferId = secondOfferJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + firstOfferId + "/select"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + secondOfferId + "/select"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("OFFER_ALREADY_SELECTED"));
+    }
+
+    @Test
+    void sanctionWithoutASelectedOfferIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.decision").value("APPROVED"));
+
+        mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("NO_OFFER_SELECTED"));
+    }
+
+    @Test
+    void disbursementExceedingTheSanctionedAmountIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/submit")).andExpect(status().isOk());
+
+        String offerJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String offerId = offerJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/loans/" + reference + "/sanction")).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 600000.00, \"requestReference\": \"TRANCHE-OVER\"}"))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.errors[0].code").value("DISBURSEMENT_EXCEEDS_SANCTIONED_AMOUNT"));
+    }
+
+    @Test
+    void duplicateDisbursementRequestReferenceIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/submit")).andExpect(status().isOk());
+
+        String offerJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String offerId = offerJson.split("\"id\":\"")[1].split("\"")[0];
+
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/loans/" + reference + "/sanction")).andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 100000.00, \"requestReference\": \"TRANCHE-DUP\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"amount\": 100000.00, \"requestReference\": \"TRANCHE-DUP\"}"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("DUPLICATE_DISBURSEMENT_REQUEST"));
     }
 
     @Test
