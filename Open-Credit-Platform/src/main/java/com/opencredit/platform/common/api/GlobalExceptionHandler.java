@@ -4,6 +4,7 @@ import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.exception.DuplicateCustomerException;
 import com.opencredit.platform.document.exception.IllegalDocumentTransitionException;
 import com.opencredit.platform.document.exception.LoanDocumentNotFoundException;
+import com.opencredit.platform.financial.exception.FinancialAnalysisRunNotFoundException;
 import com.opencredit.platform.financial.exception.FinancialStatementNotFoundException;
 import com.opencredit.platform.financial.exception.InvalidFinancialPeriodException;
 import com.opencredit.platform.kyc.exception.DuplicateKycCaseException;
@@ -15,6 +16,16 @@ import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.exception.LoanProductNotFoundException;
 import com.opencredit.platform.loan.exception.UnsupportedProductTypeException;
+import com.opencredit.platform.scoring.exception.DuplicateScoreException;
+import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
+import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
+import com.opencredit.platform.scoring.exception.InvalidScorecardRuleRangeException;
+import com.opencredit.platform.scoring.exception.NoActiveScorecardException;
+import com.opencredit.platform.scoring.exception.OverlappingScorecardRuleException;
+import com.opencredit.platform.scoring.exception.ScoreNotFoundException;
+import com.opencredit.platform.scoring.exception.ScorecardInUseException;
+import com.opencredit.platform.scoring.exception.ScorecardNotFoundException;
+import com.opencredit.platform.scoring.exception.ScorecardRuleNotFoundException;
 import com.opencredit.platform.underwriting.exception.IllegalUnderwritingAttemptTransitionException;
 import com.opencredit.platform.underwriting.exception.InvalidUnderwritingStateException;
 import com.opencredit.platform.underwriting.exception.UnderwritingCaseNotFoundException;
@@ -310,6 +321,138 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(FinancialAnalysisRunNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleFinancialAnalysisRunNotFound(FinancialAnalysisRunNotFoundException ex,
+                                                                                    HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "FINANCIAL_ANALYSIS_RUN_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(NoActiveScorecardException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoActiveScorecard(NoActiveScorecardException ex,
+                                                                        HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "NO_ACTIVE_SCORECARD",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateScoreException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateScore(DuplicateScoreException ex,
+                                                                     HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_SCORE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ScoreNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleScoreNotFound(ScoreNotFoundException ex,
+                                                                     HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "SCORE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ScorecardNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleScorecardNotFound(ScorecardNotFoundException ex,
+                                                                        HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "SCORECARD_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateScorecardNameException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateScorecardName(DuplicateScorecardNameException ex,
+                                                                             HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_SCORECARD_NAME",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidScorecardRangeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidScorecardRange(InvalidScorecardRangeException ex,
+                                                                            HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "INVALID_SCORECARD_RANGE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidScorecardRuleRangeException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidScorecardRuleRange(InvalidScorecardRuleRangeException ex,
+                                                                                HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNPROCESSABLE_CONTENT,
+                "INVALID_SCORECARD_RULE_RANGE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(OverlappingScorecardRuleException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOverlappingScorecardRule(OverlappingScorecardRuleException ex,
+                                                                               HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "OVERLAPPING_SCORECARD_RULE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ScorecardRuleNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleScorecardRuleNotFound(ScorecardRuleNotFoundException ex,
+                                                                            HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "SCORECARD_RULE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ScorecardInUseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleScorecardInUse(ScorecardInUseException ex,
+                                                                     HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "SCORECARD_IN_USE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)
