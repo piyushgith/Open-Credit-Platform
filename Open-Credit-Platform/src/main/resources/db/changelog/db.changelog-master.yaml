@@ -62,3 +62,18 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/021-seed-default-scorecard.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/022-create-credit-policy.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/023-create-credit-rule.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/024-create-credit-decision.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/025-create-rule-result.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/026-seed-default-credit-policy.sql
+      relativeToChangelogFile: false

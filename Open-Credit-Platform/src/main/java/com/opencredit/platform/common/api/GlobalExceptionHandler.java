@@ -2,6 +2,13 @@ package com.opencredit.platform.common.api;
 
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.exception.DuplicateCustomerException;
+import com.opencredit.platform.decision.exception.CreditPolicyInUseException;
+import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
+import com.opencredit.platform.decision.exception.CreditRuleNotFoundException;
+import com.opencredit.platform.decision.exception.DuplicateCreditDecisionException;
+import com.opencredit.platform.decision.exception.DuplicateCreditPolicyNameException;
+import com.opencredit.platform.decision.exception.DuplicateCreditRuleFactorException;
+import com.opencredit.platform.decision.exception.NoActiveCreditPolicyException;
 import com.opencredit.platform.document.exception.IllegalDocumentTransitionException;
 import com.opencredit.platform.document.exception.LoanDocumentNotFoundException;
 import com.opencredit.platform.financial.exception.FinancialAnalysisRunNotFoundException;
@@ -449,6 +456,90 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.of(
                 HttpStatus.CONFLICT,
                 "SCORECARD_IN_USE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(NoActiveCreditPolicyException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoActiveCreditPolicy(NoActiveCreditPolicyException ex,
+                                                                           HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "NO_ACTIVE_CREDIT_POLICY",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateCreditDecisionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCreditDecision(DuplicateCreditDecisionException ex,
+                                                                              HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_CREDIT_DECISION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(CreditPolicyNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditPolicyNotFound(CreditPolicyNotFoundException ex,
+                                                                           HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "CREDIT_POLICY_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateCreditPolicyNameException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCreditPolicyName(DuplicateCreditPolicyNameException ex,
+                                                                                HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_CREDIT_POLICY_NAME",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(CreditRuleNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditRuleNotFound(CreditRuleNotFoundException ex,
+                                                                         HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "CREDIT_RULE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateCreditRuleFactorException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateCreditRuleFactor(DuplicateCreditRuleFactorException ex,
+                                                                                HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_CREDIT_RULE_FACTOR",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(CreditPolicyInUseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditPolicyInUse(CreditPolicyInUseException ex,
+                                                                         HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CREDIT_POLICY_IN_USE",
                 ex.getMessage(),
                 request.getRequestURI()
         );
