@@ -3,8 +3,10 @@ package com.opencredit.platform.authority;
 import com.opencredit.platform.authority.dto.AuthorityMatrixEntryRequest;
 import com.opencredit.platform.authority.dto.AuthorityMatrixEntryResponse;
 import com.opencredit.platform.authority.exception.AuthorityMatrixEntryNotFoundException;
+import com.opencredit.platform.authority.exception.DuplicateAuthorityMatrixMatchOrderException;
 import com.opencredit.platform.authority.model.AuthorityMatrixEntry;
 import com.opencredit.platform.authority.repository.AuthorityMatrixEntryRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,7 +30,9 @@ public class AuthorityMatrixAdminService {
     }
 
     public AuthorityMatrixEntryResponse create(AuthorityMatrixEntryRequest request) {
-        AuthorityMatrixEntry entry = entryRepository.save(AuthorityMatrixEntry.builder()
+        assertNoActiveMatchOrderConflict(request.getMatchOrder(), request.getActive(), null);
+
+        AuthorityMatrixEntry entry = AuthorityMatrixEntry.builder()
                 .id(UUID.randomUUID())
                 .productType(request.getProductType())
                 .riskGrade(request.getRiskGrade())
@@ -38,7 +42,8 @@ public class AuthorityMatrixAdminService {
                 .matchOrder(request.getMatchOrder())
                 .active(request.getActive())
                 .createdAt(Instant.now())
-                .build());
+                .build();
+        saveGuardingMatchOrder(entry, request.getMatchOrder());
         return toResponse(entry);
     }
 
@@ -54,6 +59,8 @@ public class AuthorityMatrixAdminService {
 
     public AuthorityMatrixEntryResponse update(UUID entryId, AuthorityMatrixEntryRequest request) {
         AuthorityMatrixEntry entry = getEntity(entryId);
+        assertNoActiveMatchOrderConflict(request.getMatchOrder(), request.getActive(), entryId);
+
         entry.setProductType(request.getProductType());
         entry.setRiskGrade(request.getRiskGrade());
         entry.setMinAmount(request.getMinAmount());
@@ -61,12 +68,37 @@ public class AuthorityMatrixAdminService {
         entry.setRequiredLevel(request.getRequiredLevel());
         entry.setMatchOrder(request.getMatchOrder());
         entry.setActive(request.getActive());
-        entryRepository.save(entry);
+        saveGuardingMatchOrder(entry, request.getMatchOrder());
         return toResponse(entry);
     }
 
     public void delete(UUID entryId) {
         entryRepository.delete(getEntity(entryId));
+    }
+
+    /**
+     * Fast-path guard against two active entries sharing a {@code matchOrder}, which would make
+     * {@code AuthorityMatrixResolver}'s ordering non-deterministic — see
+     * {@code uq_authority_matrix_entry_active_match_order}, the real guard this backs up.
+     */
+    private void assertNoActiveMatchOrderConflict(int matchOrder, boolean active, UUID excludingEntryId) {
+        if (!active) {
+            return;
+        }
+        boolean conflict = excludingEntryId == null
+                ? entryRepository.existsByActiveTrueAndMatchOrder(matchOrder)
+                : entryRepository.existsByActiveTrueAndMatchOrderAndIdNot(matchOrder, excludingEntryId);
+        if (conflict) {
+            throw new DuplicateAuthorityMatrixMatchOrderException(matchOrder);
+        }
+    }
+
+    private void saveGuardingMatchOrder(AuthorityMatrixEntry entry, int matchOrder) {
+        try {
+            entryRepository.saveAndFlush(entry);
+        } catch (DataIntegrityViolationException ex) {
+            throw new DuplicateAuthorityMatrixMatchOrderException(matchOrder);
+        }
     }
 
     private AuthorityMatrixEntry getEntity(UUID entryId) {

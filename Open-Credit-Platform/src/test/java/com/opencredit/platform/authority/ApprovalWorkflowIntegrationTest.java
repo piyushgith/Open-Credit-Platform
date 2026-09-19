@@ -1,5 +1,7 @@
 package com.opencredit.platform.authority;
 
+import com.opencredit.platform.audit.model.AuditEventType;
+import com.opencredit.platform.audit.repository.AuditBusinessEventRepository;
 import com.opencredit.platform.authority.model.ApprovalLevel;
 import com.opencredit.platform.security.model.AppRole;
 import com.opencredit.platform.security.support.AuthenticatedUser;
@@ -50,6 +52,9 @@ class ApprovalWorkflowIntegrationTest {
 
     @Autowired
     private WebApplicationContext webApplicationContext;
+
+    @Autowired
+    private AuditBusinessEventRepository auditBusinessEventRepository;
 
     @AfterEach
     void clearSecurityContext() {
@@ -608,6 +613,21 @@ class ApprovalWorkflowIntegrationTest {
         mockMvc.perform(post("/api/credit-decisions/" + decisionId + "/approval-case"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errors[0].code").value("APPROVAL_NOT_REQUIRED"));
+    }
+
+    /** Opening a case is the most audit-sensitive step in this pipeline; it must leave a trail. */
+    @Test
+    void openingACaseRecordsAnAuditEvent() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String decisionId = decideForAmount(mockMvc, "1500000.00");
+        String caseId = openCase(mockMvc, decisionId);
+
+        List<AuditEventType> recordedEventTypes = auditBusinessEventRepository
+                .findAllByEntityTypeAndEntityIdOrderByOccurredAtAsc("ApprovalCase", UUID.fromString(caseId))
+                .stream()
+                .map(event -> event.getEventType())
+                .toList();
+        assertThat(recordedEventTypes).contains(AuditEventType.APPROVAL_CASE_OPENED);
     }
 
     @Test

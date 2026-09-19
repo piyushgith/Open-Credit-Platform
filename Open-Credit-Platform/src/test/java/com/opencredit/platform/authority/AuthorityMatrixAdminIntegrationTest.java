@@ -51,6 +51,65 @@ class AuthorityMatrixAdminIntegrationTest {
         return responseJson.split("\"id\":\"")[1].split("\"")[0];
     }
 
+    /**
+     * {@code uq_authority_matrix_entry_active_match_order} (042) plus this pre-check exist because
+     * {@link com.opencredit.platform.authority.support.AuthorityMatrixResolver} picks the first
+     * active entry ordered by {@code matchOrder} — two active entries sharing a {@code matchOrder}
+     * would make resolution depend on undefined row order.
+     */
+    @Test
+    void creatingAnActiveEntryWithAnAlreadyUsedMatchOrderIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String entryId = createEntry(mockMvc, 9201, "CREDIT_OFFICER");
+
+        try {
+            String conflictingJson = """
+                    {
+                      "productType": "VEHICLE",
+                      "requiredLevel": "SENIOR_CREDIT_MANAGER",
+                      "matchOrder": 9201,
+                      "active": true
+                    }
+                    """;
+            mockMvc.perform(post("/api/authority-matrix")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(conflictingJson))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errors[0].code").value("DUPLICATE_AUTHORITY_MATRIX_MATCH_ORDER"));
+        } finally {
+            mockMvc.perform(delete("/api/authority-matrix/" + entryId)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void updatingAnEntryToAnAlreadyUsedActiveMatchOrderIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String firstEntryId = createEntry(mockMvc, 9202, "CREDIT_OFFICER");
+        String otherEntryId = createEntry(mockMvc, 9203, "SENIOR_CREDIT_MANAGER");
+
+        try {
+            String updateJson = """
+                    {
+                      "productType": "PERSONAL",
+                      "riskGrade": "F",
+                      "minAmount": 9000000.00,
+                      "maxAmount": 9500000.00,
+                      "requiredLevel": "SENIOR_CREDIT_MANAGER",
+                      "matchOrder": 9202,
+                      "active": true
+                    }
+                    """;
+            mockMvc.perform(put("/api/authority-matrix/" + otherEntryId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(updateJson))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errors[0].code").value("DUPLICATE_AUTHORITY_MATRIX_MATCH_ORDER"));
+        } finally {
+            mockMvc.perform(delete("/api/authority-matrix/" + firstEntryId)).andExpect(status().isOk());
+            mockMvc.perform(delete("/api/authority-matrix/" + otherEntryId)).andExpect(status().isOk());
+        }
+    }
+
     @Test
     void createsListsGetsUpdatesAndDeletesAnEntry() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();

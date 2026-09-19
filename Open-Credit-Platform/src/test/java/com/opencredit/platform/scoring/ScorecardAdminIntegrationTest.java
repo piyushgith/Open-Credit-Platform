@@ -4,14 +4,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
 
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -266,6 +277,65 @@ class ScorecardAdminIntegrationTest {
             reactivateSeededScorecard(mockMvc);
             mockMvc.perform(delete("/api/scorecards/" + firstId)).andExpect(status().isOk());
             mockMvc.perform(delete("/api/scorecards/" + secondId)).andExpect(status().isOk());
+        }
+    }
+
+    /**
+     * Week 12 concurrency review: {@code uq_scorecard_active} is the real guard behind
+     * {@code activate()}'s deactivate-then-activate flow — this proves a race between two
+     * concurrent activations never leaves two scorecards active and never surfaces as a raw 500
+     * (the loser must get a clean {@code CONCURRENT_SCORECARD_ACTIVATION} conflict instead).
+     */
+    @Test
+    void concurrentlyActivatingTwoDifferentScorecardsLeavesExactlyOneActive() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String firstId = createScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_1"), 300, 500, 900);
+        String secondId = createScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_2"), 300, 500, 900);
+
+        CyclicBarrier barrier = new CyclicBarrier(2);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Callable<Integer> activateFirst = () -> activate(mockMvc, firstId, barrier);
+            Callable<Integer> activateSecond = () -> activate(mockMvc, secondId, barrier);
+
+            Future<Integer> resultA = executor.submit(activateFirst);
+            Future<Integer> resultB = executor.submit(activateSecond);
+
+            int statusA = resultA.get(10, TimeUnit.SECONDS);
+            int statusB = resultB.get(10, TimeUnit.SECONDS);
+
+            assertThat(List.of(statusA, statusB)).allMatch(s -> s == 200 || s == 409);
+
+            String firstActive = mockMvc.perform(get("/api/scorecards/" + firstId))
+                    .andReturn().getResponse().getContentAsString();
+            String secondActive = mockMvc.perform(get("/api/scorecards/" + secondId))
+                    .andReturn().getResponse().getContentAsString();
+            long activeCount = List.of(firstActive, secondActive).stream()
+                    .filter(json -> json.contains("\"active\":true"))
+                    .count();
+            assertThat(activeCount).isEqualTo(1);
+        } finally {
+            reactivateSeededScorecard(mockMvc);
+            mockMvc.perform(delete("/api/scorecards/" + firstId)).andExpect(status().isOk());
+            mockMvc.perform(delete("/api/scorecards/" + secondId)).andExpect(status().isOk());
+        }
+    }
+
+    /**
+     * {@code @WithMockUser} only seeds the {@code SecurityContextHolder} on the test's own thread,
+     * not on the executor thread this callable runs on (Spring Security's default is
+     * thread-local) — so the ADMIN authentication has to be set here, same as
+     * {@code ApprovalWorkflowIntegrationTest.checkerDecision} does for its own concurrency test.
+     */
+    private int activate(MockMvc mockMvc, String scorecardId, CyclicBarrier barrier) throws Exception {
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                "admin", null, List.of(new SimpleGrantedAuthority("ROLE_ADMIN"))));
+        try {
+            barrier.await(10, TimeUnit.SECONDS);
+            return mockMvc.perform(post("/api/scorecards/" + scorecardId + "/activate"))
+                    .andReturn().getResponse().getStatus();
+        } finally {
+            SecurityContextHolder.clearContext();
         }
     }
 

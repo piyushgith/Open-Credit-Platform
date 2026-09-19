@@ -4,6 +4,7 @@ import com.opencredit.platform.decision.dto.CreditPolicyRequest;
 import com.opencredit.platform.decision.dto.CreditPolicyResponse;
 import com.opencredit.platform.decision.dto.CreditRuleRequest;
 import com.opencredit.platform.decision.dto.CreditRuleResponse;
+import com.opencredit.platform.decision.exception.ConcurrentCreditPolicyActivationException;
 import com.opencredit.platform.decision.exception.CreditPolicyInUseException;
 import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
 import com.opencredit.platform.decision.exception.CreditRuleNotFoundException;
@@ -14,6 +15,8 @@ import com.opencredit.platform.decision.model.CreditRule;
 import com.opencredit.platform.decision.repository.CreditDecisionRepository;
 import com.opencredit.platform.decision.repository.CreditPolicyRepository;
 import com.opencredit.platform.decision.repository.CreditRuleRepository;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -96,18 +99,27 @@ public class CreditPolicyAdminService {
     /**
      * Deactivates the currently-active policy (if any) before activating this one, so the
      * {@code uq_credit_policy_active} partial unique index never sees two active rows at once —
-     * same two-step flow {@code ScorecardAdminService} uses to swap the active scorecard.
+     * same two-step flow {@code ScorecardAdminService} uses to swap the active scorecard. Both
+     * flushes are guarded: two concurrent activations can either race to deactivate the same
+     * currently-active row (caught as {@link ObjectOptimisticLockingFailureException} on that
+     * row's {@code version}) or race to become the new active row (caught as
+     * {@link DataIntegrityViolationException} against {@code uq_credit_policy_active}) — either
+     * way the loser gets a clean conflict instead of a raw 500.
      */
     public CreditPolicyResponse activate(UUID policyId) {
         CreditPolicy policy = getEntity(policyId);
-        policyRepository.findByActiveTrue().ifPresent(current -> {
-            if (!current.getId().equals(policyId)) {
-                current.setActive(false);
-                policyRepository.saveAndFlush(current);
-            }
-        });
-        policy.setActive(true);
-        policyRepository.save(policy);
+        try {
+            policyRepository.findByActiveTrue().ifPresent(current -> {
+                if (!current.getId().equals(policyId)) {
+                    current.setActive(false);
+                    policyRepository.saveAndFlush(current);
+                }
+            });
+            policy.setActive(true);
+            policyRepository.saveAndFlush(policy);
+        } catch (DataIntegrityViolationException | ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrentCreditPolicyActivationException(policyId);
+        }
         return toResponse(policy, ruleRepository.findAllByPolicyIdOrderByRuleOrderAsc(policyId));
     }
 

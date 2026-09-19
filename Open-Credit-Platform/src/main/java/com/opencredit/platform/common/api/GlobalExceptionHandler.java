@@ -5,6 +5,7 @@ import com.opencredit.platform.authority.exception.ApprovalNotRequiredException;
 import com.opencredit.platform.authority.exception.AuthorityMatrixEntryNotFoundException;
 import com.opencredit.platform.authority.exception.ConcurrentApprovalConflictException;
 import com.opencredit.platform.authority.exception.DuplicateApprovalCaseException;
+import com.opencredit.platform.authority.exception.DuplicateAuthorityMatrixMatchOrderException;
 import com.opencredit.platform.authority.exception.IllegalApprovalTransitionException;
 import com.opencredit.platform.authority.exception.InsufficientApprovalAuthorityException;
 import com.opencredit.platform.authority.exception.NoMatchingAuthorityMatrixEntryException;
@@ -16,6 +17,7 @@ import com.opencredit.platform.disbursement.exception.DisbursementAlreadyComplet
 import com.opencredit.platform.disbursement.exception.DisbursementExceedsSanctionedAmountException;
 import com.opencredit.platform.disbursement.exception.DisbursementNotFoundException;
 import com.opencredit.platform.disbursement.exception.DuplicateDisbursementRequestException;
+import com.opencredit.platform.decision.exception.ConcurrentCreditPolicyActivationException;
 import com.opencredit.platform.decision.exception.CreditDecisionNotFoundException;
 import com.opencredit.platform.decision.exception.CreditPolicyInUseException;
 import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
@@ -45,6 +47,7 @@ import com.opencredit.platform.offer.exception.OfferNotEligibleException;
 import com.opencredit.platform.offer.exception.OfferNotEligibleForSelectionException;
 import com.opencredit.platform.offer.exception.OfferNotFoundException;
 import com.opencredit.platform.offer.exception.SanctionNotFoundException;
+import com.opencredit.platform.scoring.exception.ConcurrentScorecardActivationException;
 import com.opencredit.platform.scoring.exception.DuplicateScoreException;
 import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
@@ -505,6 +508,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
     }
 
+    @ExceptionHandler(ConcurrentScorecardActivationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentScorecardActivation(
+            ConcurrentScorecardActivationException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_SCORECARD_ACTIVATION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
     @ExceptionHandler(ScorecardInUseException.class)
     public ResponseEntity<ApiResponse<Void>> handleScorecardInUse(ScorecardInUseException ex,
                                                                      HttpServletRequest request) {
@@ -589,6 +604,18 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
     }
 
+    @ExceptionHandler(ConcurrentCreditPolicyActivationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentCreditPolicyActivation(
+            ConcurrentCreditPolicyActivationException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_CREDIT_POLICY_ACTIVATION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
     @ExceptionHandler(CreditPolicyInUseException.class)
     public ResponseEntity<ApiResponse<Void>> handleCreditPolicyInUse(CreditPolicyInUseException ex,
                                                                          HttpServletRequest request) {
@@ -655,6 +682,18 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.of(
                 HttpStatus.CONFLICT,
                 "DUPLICATE_APPROVAL_CASE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateAuthorityMatrixMatchOrderException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateAuthorityMatrixMatchOrder(
+            DuplicateAuthorityMatrixMatchOrderException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_AUTHORITY_MATRIX_MATCH_ORDER",
                 ex.getMessage(),
                 request.getRequestURI()
         );

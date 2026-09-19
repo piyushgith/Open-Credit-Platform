@@ -4,6 +4,7 @@ import com.opencredit.platform.scoring.dto.ScorecardRequest;
 import com.opencredit.platform.scoring.dto.ScorecardResponse;
 import com.opencredit.platform.scoring.dto.ScorecardRuleRequest;
 import com.opencredit.platform.scoring.dto.ScorecardRuleResponse;
+import com.opencredit.platform.scoring.exception.ConcurrentScorecardActivationException;
 import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRuleRangeException;
@@ -17,6 +18,8 @@ import com.opencredit.platform.scoring.model.ScorecardRule;
 import com.opencredit.platform.scoring.repository.ScoreRepository;
 import com.opencredit.platform.scoring.repository.ScorecardRepository;
 import com.opencredit.platform.scoring.repository.ScorecardRuleRepository;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -108,19 +111,28 @@ public class ScorecardAdminService {
 
     /**
      * Deactivates the currently-active scorecard (if any) before activating this one, so the
-     * {@code uq_scorecard_active} partial unique index never sees two active rows at once —
-     * same two-step flow the underwriting module uses to swap the active attempt.
+     * {@code uq_scorecard_active} partial unique index never sees two active rows at once — same
+     * two-step flow the underwriting module uses to swap the active attempt. Both flushes are
+     * guarded: two concurrent activations can either race to deactivate the same currently-active
+     * row (caught as {@link ObjectOptimisticLockingFailureException} on that row's {@code version})
+     * or race to become the new active row (caught as {@link DataIntegrityViolationException}
+     * against {@code uq_scorecard_active}) — either way the loser gets a clean conflict instead of
+     * a raw 500.
      */
     public ScorecardResponse activate(UUID scorecardId) {
         Scorecard scorecard = getEntity(scorecardId);
-        scorecardRepository.findByActiveTrue().ifPresent(current -> {
-            if (!current.getId().equals(scorecardId)) {
-                current.setActive(false);
-                scorecardRepository.saveAndFlush(current);
-            }
-        });
-        scorecard.setActive(true);
-        scorecardRepository.save(scorecard);
+        try {
+            scorecardRepository.findByActiveTrue().ifPresent(current -> {
+                if (!current.getId().equals(scorecardId)) {
+                    current.setActive(false);
+                    scorecardRepository.saveAndFlush(current);
+                }
+            });
+            scorecard.setActive(true);
+            scorecardRepository.saveAndFlush(scorecard);
+        } catch (DataIntegrityViolationException | ObjectOptimisticLockingFailureException ex) {
+            throw new ConcurrentScorecardActivationException(scorecardId);
+        }
         return toResponse(scorecard, ruleRepository.findAllByScorecardIdOrderByFactorCodeAscBandOrderAsc(scorecardId));
     }
 

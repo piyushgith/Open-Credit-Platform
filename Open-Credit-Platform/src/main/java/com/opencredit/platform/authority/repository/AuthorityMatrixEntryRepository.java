@@ -11,4 +11,8 @@ public interface AuthorityMatrixEntryRepository extends JpaRepository<AuthorityM
     List<AuthorityMatrixEntry> findAllByOrderByMatchOrderAsc();
 
     List<AuthorityMatrixEntry> findAllByActiveTrueOrderByMatchOrderAsc();
+
+    boolean existsByActiveTrueAndMatchOrder(int matchOrder);
+
+    boolean existsByActiveTrueAndMatchOrderAndIdNot(int matchOrder, UUID id);
 }

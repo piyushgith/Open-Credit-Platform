@@ -147,6 +147,8 @@ public class ApprovalService {
                 .status(ApprovalCaseStatus.PENDING_MAKER)
                 .createdAt(Instant.now())
                 .build());
+        auditService.recordEvent(AuditEventType.APPROVAL_CASE_OPENED, "ApprovalCase", approvalCase.getId(),
+                "Opened requiring " + requiredLevel + " approval for decision " + decisionId);
 
         return toResponse(approvalCase, List.of());
     }
