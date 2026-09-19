@@ -1,7 +1,17 @@
 package com.opencredit.platform.common.api;
 
+import com.opencredit.platform.authority.exception.ApprovalCaseNotFoundException;
+import com.opencredit.platform.authority.exception.ApprovalNotRequiredException;
+import com.opencredit.platform.authority.exception.AuthorityMatrixEntryNotFoundException;
+import com.opencredit.platform.authority.exception.ConcurrentApprovalConflictException;
+import com.opencredit.platform.authority.exception.DuplicateApprovalCaseException;
+import com.opencredit.platform.authority.exception.IllegalApprovalTransitionException;
+import com.opencredit.platform.authority.exception.InsufficientApprovalAuthorityException;
+import com.opencredit.platform.authority.exception.NoMatchingAuthorityMatrixEntryException;
+import com.opencredit.platform.authority.exception.SelfApprovalException;
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.exception.DuplicateCustomerException;
+import com.opencredit.platform.decision.exception.CreditDecisionNotFoundException;
 import com.opencredit.platform.decision.exception.CreditPolicyInUseException;
 import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
 import com.opencredit.platform.decision.exception.CreditRuleNotFoundException;
@@ -540,6 +550,125 @@ public class GlobalExceptionHandler {
         ApiError error = ApiError.of(
                 HttpStatus.CONFLICT,
                 "CREDIT_POLICY_IN_USE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(CreditDecisionNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCreditDecisionNotFound(CreditDecisionNotFoundException ex,
+                                                                             HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "CREDIT_DECISION_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(AuthorityMatrixEntryNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAuthorityMatrixEntryNotFound(AuthorityMatrixEntryNotFoundException ex,
+                                                                                   HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "AUTHORITY_MATRIX_ENTRY_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(NoMatchingAuthorityMatrixEntryException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoMatchingAuthorityMatrixEntry(NoMatchingAuthorityMatrixEntryException ex,
+                                                                                     HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "NO_MATCHING_AUTHORITY_MATRIX_ENTRY",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ApprovalCaseNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApprovalCaseNotFound(ApprovalCaseNotFoundException ex,
+                                                                           HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "APPROVAL_CASE_NOT_FOUND",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(DuplicateApprovalCaseException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDuplicateApprovalCase(DuplicateApprovalCaseException ex,
+                                                                            HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DUPLICATE_APPROVAL_CASE",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ApprovalNotRequiredException.class)
+    public ResponseEntity<ApiResponse<Void>> handleApprovalNotRequired(ApprovalNotRequiredException ex,
+                                                                          HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "APPROVAL_NOT_REQUIRED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(IllegalApprovalTransitionException.class)
+    public ResponseEntity<ApiResponse<Void>> handleIllegalApprovalTransition(IllegalApprovalTransitionException ex,
+                                                                                HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "ILLEGAL_APPROVAL_TRANSITION",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(SelfApprovalException.class)
+    public ResponseEntity<ApiResponse<Void>> handleSelfApproval(SelfApprovalException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "SELF_APPROVAL_NOT_ALLOWED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InsufficientApprovalAuthorityException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInsufficientApprovalAuthority(InsufficientApprovalAuthorityException ex,
+                                                                                    HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "INSUFFICIENT_APPROVAL_AUTHORITY",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ConcurrentApprovalConflictException.class)
+    public ResponseEntity<ApiResponse<Void>> handleConcurrentApprovalConflict(ConcurrentApprovalConflictException ex,
+                                                                                 HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_APPROVAL_CONFLICT",
                 ex.getMessage(),
                 request.getRequestURI()
         );

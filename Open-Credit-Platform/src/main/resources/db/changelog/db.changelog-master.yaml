@@ -77,3 +77,15 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/026-seed-default-credit-policy.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/027-create-authority-matrix-entry.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/028-seed-default-authority-matrix.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/029-create-approval-case.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/030-create-approval-decision.sql
+      relativeToChangelogFile: false
