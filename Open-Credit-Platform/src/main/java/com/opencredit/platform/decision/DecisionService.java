@@ -1,5 +1,7 @@
 package com.opencredit.platform.decision;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.decision.dto.CreditDecisionResponse;
 import com.opencredit.platform.decision.dto.RuleResultResponse;
 import com.opencredit.platform.decision.exception.DuplicateCreditDecisionException;
@@ -65,6 +67,7 @@ public class DecisionService {
     private final CreditDecisionRepository decisionRepository;
     private final RuleResultRepository ruleResultRepository;
     private final DecisionEngine decisionEngine;
+    private final AuditService auditService;
 
     public DecisionService(LoanApplicationRepository loanApplicationRepository,
                             FinancialStatementRepository statementRepository,
@@ -76,7 +79,8 @@ public class DecisionService {
                             CreditRuleRepository ruleRepository,
                             CreditDecisionRepository decisionRepository,
                             RuleResultRepository ruleResultRepository,
-                            DecisionEngine decisionEngine) {
+                            DecisionEngine decisionEngine,
+                            AuditService auditService) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.statementRepository = statementRepository;
         this.runRepository = runRepository;
@@ -88,6 +92,7 @@ public class DecisionService {
         this.decisionRepository = decisionRepository;
         this.ruleResultRepository = ruleResultRepository;
         this.decisionEngine = decisionEngine;
+        this.auditService = auditService;
     }
 
     public CreditDecisionResponse decide(String referenceNumber, UUID statementId, UUID analysisRunId, UUID scoreId) {
@@ -120,6 +125,9 @@ public class DecisionService {
                 .map(outcome -> toRuleResult(decision.getId(), outcome))
                 .toList();
         ruleResultRepository.saveAll(resultRows);
+
+        auditService.recordEvent(AuditEventType.DECISION_CREATED, "CreditDecision", decision.getId(),
+                "Outcome " + result.outcome() + " under policy " + policy.getName());
 
         return toResponse(policy, decision, resultRows);
     }

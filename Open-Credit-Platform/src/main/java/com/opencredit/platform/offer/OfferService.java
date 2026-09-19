@@ -1,5 +1,7 @@
 package com.opencredit.platform.offer;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.loan.LoanProductService;
 import com.opencredit.platform.loan.dto.LoanResponse;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
@@ -53,19 +55,22 @@ public class OfferService {
     private final OfferRepository offerRepository;
     private final SanctionRepository sanctionRepository;
     private final ObjectMapper objectMapper;
+    private final AuditService auditService;
 
     public OfferService(LoanApplicationRepository loanApplicationRepository,
                          LoanProductService loanProductService,
                          EmiCalculator emiCalculator,
                          OfferRepository offerRepository,
                          SanctionRepository sanctionRepository,
-                         ObjectMapper objectMapper) {
+                         ObjectMapper objectMapper,
+                         AuditService auditService) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.loanProductService = loanProductService;
         this.emiCalculator = emiCalculator;
         this.offerRepository = offerRepository;
         this.sanctionRepository = sanctionRepository;
         this.objectMapper = objectMapper;
+        this.auditService = auditService;
     }
 
     public OfferResponse createOffer(String referenceNumber, OfferRequest request) {
@@ -104,6 +109,9 @@ public class OfferService {
                 .createdAt(Instant.now())
                 .build());
 
+        auditService.recordEvent(AuditEventType.OFFER_CREATED, "Offer", offer.getId(),
+                "Offer of " + offerAmount + " over " + request.getTenureMonths() + " months for " + referenceNumber);
+
         return toResponse(offer, referenceNumber);
     }
 
@@ -132,12 +140,16 @@ public class OfferService {
             throw new OfferAlreadySelectedException(referenceNumber);
         }
 
+        OfferStatus previousStatus = offer.getStatus();
         offer.setStatus(OfferStatus.SELECTED);
         try {
             offerRepository.saveAndFlush(offer);
         } catch (DataIntegrityViolationException ex) {
             throw new OfferAlreadySelectedException(referenceNumber);
         }
+        auditService.recordDataChange("Offer", offer.getId(), "status", previousStatus, offer.getStatus());
+        auditService.recordEvent(AuditEventType.OFFER_ACCEPTED, "Offer", offer.getId(),
+                "Offer selected for " + referenceNumber);
 
         return toResponse(offer, referenceNumber);
     }
@@ -162,7 +174,7 @@ public class OfferService {
         Offer selected = offerRepository.findByApplicationIdAndStatus(applicationId, OfferStatus.SELECTED)
                 .orElseThrow(() -> new NoOfferSelectedException(applicationId));
 
-        return sanctionRepository.save(Sanction.builder()
+        Sanction sanction = sanctionRepository.save(Sanction.builder()
                 .id(UUID.randomUUID())
                 .applicationId(applicationId)
                 .offerId(selected.getId())
@@ -172,6 +184,11 @@ public class OfferService {
                 .monthlyEmi(selected.getMonthlyEmi())
                 .createdAt(Instant.now())
                 .build());
+
+        auditService.recordEvent(AuditEventType.SANCTION_APPROVED, "Sanction", sanction.getId(),
+                "Sanctioned " + sanction.getSanctionedAmount() + " for application " + applicationId);
+
+        return sanction;
     }
 
     private LoanApplication getApplication(String referenceNumber) {

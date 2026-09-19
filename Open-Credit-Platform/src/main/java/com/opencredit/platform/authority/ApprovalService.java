@@ -1,5 +1,7 @@
 package com.opencredit.platform.authority;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.authority.dto.ApprovalActionRequest;
 import com.opencredit.platform.authority.dto.ApprovalCaseResponse;
 import com.opencredit.platform.authority.dto.ApprovalDecisionResponse;
@@ -30,10 +32,14 @@ import com.opencredit.platform.financial.model.FinancialAnalysisRun;
 import com.opencredit.platform.financial.model.FinancialStatement;
 import com.opencredit.platform.financial.repository.FinancialAnalysisRunRepository;
 import com.opencredit.platform.financial.repository.FinancialStatementRepository;
+import com.opencredit.platform.loan.LoanApplicationService;
+import com.opencredit.platform.loan.model.DecisionStatus;
 import com.opencredit.platform.loan.model.LoanApplication;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
 import com.opencredit.platform.scoring.model.Score;
 import com.opencredit.platform.scoring.repository.ScoreRepository;
+import com.opencredit.platform.security.model.AppRole;
+import com.opencredit.platform.security.support.AuthenticatedUser;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,7 +52,12 @@ import java.util.UUID;
  * Opens and drives {@link ApprovalCase}s. Resolves {@code (productType, riskGrade, amount)} for a
  * {@code CreditDecision} by walking {@code Score -> FinancialAnalysisRun -> FinancialStatement ->
  * LoanApplication} — the same cross-module-repository chain {@code DecisionService} already walks
- * in the other direction, then feeds it to {@link AuthorityMatrixResolver}.
+ * in the other direction, then feeds it to {@link AuthorityMatrixResolver}. Also the sole place
+ * that finalizes the underlying {@code LoanApplication} once this pipeline's outcome is settled —
+ * either immediately in {@link #openCase} (decline, or a resolved {@code AUTO} level needing no
+ * case) or once a checker's decision makes a case terminal — via {@code LoanApplicationService},
+ * which keeps sole ownership of {@code ApplicationStatus} mutation regardless of which pipeline
+ * triggers it.
  *
  * <p>Transaction/concurrency strategy (rules 5-7 of the Week 8 plan): every method here is
  * {@code @Transactional}, so the {@link ApprovalDecision} insert and the {@link ApprovalCase}
@@ -69,6 +80,8 @@ public class ApprovalService {
     private final AuthorityMatrixEntryRepository matrixEntryRepository;
     private final ApprovalCaseRepository caseRepository;
     private final ApprovalDecisionRepository approvalDecisionRepository;
+    private final LoanApplicationService loanApplicationService;
+    private final AuditService auditService;
 
     public ApprovalService(CreditDecisionRepository decisionRepository, ScoreRepository scoreRepository,
                             FinancialAnalysisRunRepository runRepository,
@@ -76,7 +89,9 @@ public class ApprovalService {
                             LoanApplicationRepository loanApplicationRepository,
                             AuthorityMatrixEntryRepository matrixEntryRepository,
                             ApprovalCaseRepository caseRepository,
-                            ApprovalDecisionRepository approvalDecisionRepository) {
+                            ApprovalDecisionRepository approvalDecisionRepository,
+                            LoanApplicationService loanApplicationService,
+                            AuditService auditService) {
         this.decisionRepository = decisionRepository;
         this.scoreRepository = scoreRepository;
         this.runRepository = runRepository;
@@ -85,19 +100,34 @@ public class ApprovalService {
         this.matrixEntryRepository = matrixEntryRepository;
         this.caseRepository = caseRepository;
         this.approvalDecisionRepository = approvalDecisionRepository;
+        this.loanApplicationService = loanApplicationService;
+        this.auditService = auditService;
     }
 
+    /**
+     * Resolves whether this decision needs a human approval case at all and, if not, finalizes the
+     * application itself instead of opening one — {@code DecisionService} never does this on its
+     * own (see {@link DecisionOutcome}'s Javadoc); this is the one place that resolution happens,
+     * since every caller is expected to attempt this endpoint right after a decision is made. The
+     * {@code noRollbackFor} is required: {@link ApprovalNotRequiredException} is thrown on the very
+     * same "no case needed" paths that just finalized the application, and the default rollback-on-
+     * any-{@code RuntimeException} behavior would otherwise discard that finalization.
+     */
+    @Transactional(noRollbackFor = ApprovalNotRequiredException.class)
     public ApprovalCaseResponse openCase(UUID decisionId) {
         CreditDecision decision = decisionRepository.findById(decisionId)
                 .orElseThrow(() -> new CreditDecisionNotFoundException(decisionId));
         if (caseRepository.existsByDecisionId(decisionId)) {
             throw new DuplicateApprovalCaseException(decisionId);
         }
+
+        LoanContext context = resolveContext(decision);
+
         if (decision.getOutcome() == DecisionOutcome.DECLINE) {
+            loanApplicationService.applyCreditPipelineOutcome(context.application().getId(), DecisionStatus.DECLINED);
             throw new ApprovalNotRequiredException("outcome is DECLINE");
         }
 
-        LoanContext context = resolveContext(decision);
         List<AuthorityMatrixEntry> entries = matrixEntryRepository.findAllByActiveTrueOrderByMatchOrderAsc();
         ApprovalLevel requiredLevel = AuthorityMatrixResolver
                 .resolve(entries, context.application().getProductType(), context.score().getRiskGrade(),
@@ -106,6 +136,7 @@ public class ApprovalService {
                 .orElseThrow(NoMatchingAuthorityMatrixEntryException::new);
 
         if (requiredLevel == ApprovalLevel.AUTO) {
+            loanApplicationService.applyCreditPipelineOutcome(context.application().getId(), DecisionStatus.APPROVED);
             throw new ApprovalNotRequiredException("resolved authority level is AUTO");
         }
 
@@ -146,14 +177,19 @@ public class ApprovalService {
         ApprovalCase approvalCase = getCaseEntity(caseId);
         ApprovalLifecycle.assertCanAct(approvalCase.getStatus(), role);
 
+        AuthenticatedUser actor = currentActor();
+        String actorUsername = actor.username();
+        ApprovalLevel actorLevel = actor.approvalLevel();
+
         if (role == ApprovalRole.CHECKER) {
             ApprovalDecision makerDecision =
                     approvalDecisionRepository.findByApprovalCaseIdAndRole(caseId, ApprovalRole.MAKER).orElseThrow();
-            if (makerDecision.getActorUsername().equalsIgnoreCase(request.getActorUsername())) {
-                throw new SelfApprovalException(request.getActorUsername());
+            if (makerDecision.getActorUsername().equalsIgnoreCase(actorUsername)) {
+                throw new SelfApprovalException(actorUsername);
             }
-            if (!request.getActorLevel().atLeast(approvalCase.getRequiredLevel())) {
-                throw new InsufficientApprovalAuthorityException(request.getActorLevel(), approvalCase.getRequiredLevel());
+            boolean adminOverride = actor.role() == AppRole.ADMIN;
+            if (!adminOverride && (actorLevel == null || !actorLevel.atLeast(approvalCase.getRequiredLevel()))) {
+                throw new InsufficientApprovalAuthorityException(actorLevel, approvalCase.getRequiredLevel());
             }
         }
 
@@ -161,8 +197,8 @@ public class ApprovalService {
                 .id(UUID.randomUUID())
                 .approvalCaseId(caseId)
                 .role(role)
-                .actorUsername(request.getActorUsername())
-                .actorLevel(request.getActorLevel())
+                .actorUsername(actorUsername)
+                .actorLevel(actorLevel)
                 .outcome(request.getOutcome())
                 .comment(request.getComment())
                 .decidedAt(Instant.now())
@@ -173,10 +209,45 @@ public class ApprovalService {
             throw new ConcurrentApprovalConflictException(role);
         }
 
+        ApprovalCaseStatus previousStatus = approvalCase.getStatus();
         approvalCase.setStatus(nextStatus(role, request.getOutcome()));
         caseRepository.save(approvalCase);
+        auditService.recordDataChange("ApprovalCase", approvalCase.getId(), "status", previousStatus, approvalCase.getStatus());
+        auditService.recordEvent(AuditEventType.APPROVAL_DECISION_RECORDED, "ApprovalCase", approvalCase.getId(),
+                role + " recorded " + request.getOutcome());
+
+        if (role == ApprovalRole.CHECKER) {
+            finalizeApplicationFromCaseOutcome(approvalCase);
+        }
 
         return toResponse(approvalCase, approvalDecisionRepository.findAllByApprovalCaseIdOrderByDecidedAtAsc(caseId));
+    }
+
+    /**
+     * The checker's decision is final (Week 8's plan: "the checker's outcome is final regardless
+     * of the maker's recommendation") — {@code APPROVED} or {@code REJECTED} is exactly the pair of
+     * terminal states {@code recordDecision} can just have set, so this always finalizes the
+     * underlying application the same way {@code openCase}'s auto-approval paths do.
+     */
+    private void finalizeApplicationFromCaseOutcome(ApprovalCase approvalCase) {
+        CreditDecision decision = decisionRepository.findById(approvalCase.getDecisionId()).orElseThrow();
+        LoanContext context = resolveContext(decision);
+        DecisionStatus outcome = approvalCase.getStatus() == ApprovalCaseStatus.APPROVED
+                ? DecisionStatus.APPROVED
+                : DecisionStatus.DECLINED;
+        loanApplicationService.applyCreditPipelineOutcome(context.application().getId(), outcome);
+    }
+
+    /**
+     * The endpoint-level {@code @PreAuthorize} on {@code ApprovalCaseController} already requires
+     * an authenticated {@code MAKER}/{@code CHECKER}/{@code ADMIN}, so a missing or
+     * non-{@link AuthenticatedUser} principal here would mean method security was bypassed —
+     * treated as a hard failure rather than defaulted.
+     */
+    private AuthenticatedUser currentActor() {
+        return AuthenticatedUser.current()
+                .orElseThrow(() -> new IllegalStateException(
+                        "Approval action reached the service without an authenticated principal"));
     }
 
     private static ApprovalCaseStatus nextStatus(ApprovalRole role, ApprovalOutcome outcome) {

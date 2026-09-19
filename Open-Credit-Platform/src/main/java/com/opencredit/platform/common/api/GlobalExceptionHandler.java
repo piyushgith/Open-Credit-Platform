@@ -57,12 +57,14 @@ import com.opencredit.platform.scoring.exception.ScorecardNotFoundException;
 import com.opencredit.platform.scoring.exception.ScorecardRuleNotFoundException;
 import com.opencredit.platform.underwriting.exception.IllegalUnderwritingAttemptTransitionException;
 import com.opencredit.platform.underwriting.exception.InvalidUnderwritingStateException;
+import com.opencredit.platform.security.exception.InvalidCredentialsException;
 import com.opencredit.platform.underwriting.exception.UnderwritingCaseNotFoundException;
 import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.validation.FieldError;
@@ -83,6 +85,25 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    /**
+     * {@code @PreAuthorize} throws {@link AccessDeniedException} from inside the controller
+     * method's own AOP proxy, so it surfaces here — through normal Spring MVC exception handling —
+     * rather than through {@code SecurityConfig}'s {@code RestAccessDeniedHandler}, which only
+     * sees an {@code authorizeHttpRequests} denial (one that never reaches a controller method at
+     * all). Without this handler, this specific case would fall through to
+     * {@link #handleUnexpected}: a wrong-role request would come back as 500, not 403.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.FORBIDDEN,
+                "ACCESS_DENIED",
+                "You do not have the required role for this operation",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.failure(error));
+    }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ApiResponse<Void>> handleValidation(MethodArgumentNotValidException ex,
@@ -182,6 +203,18 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiResponse<Void>> handleInvalidCredentials(InvalidCredentialsException ex,
+                                                                         HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.UNAUTHORIZED,
+                "INVALID_CREDENTIALS",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(LoanProductNotFoundException.class)

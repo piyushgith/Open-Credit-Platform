@@ -1,5 +1,7 @@
 package com.opencredit.platform.loan;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.customer.exception.CustomerNotFoundException;
 import com.opencredit.platform.customer.model.Customer;
 import com.opencredit.platform.customer.repository.CustomerRepository;
@@ -21,6 +23,7 @@ import com.opencredit.platform.loan.model.LoanProduct;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
 import com.opencredit.platform.loan.strategy.LoanProcessingStrategy;
 import com.opencredit.platform.loan.support.ApplicationLifecycle;
+import com.opencredit.platform.loan.support.EmiCalculator;
 import com.opencredit.platform.offer.OfferService;
 import com.opencredit.platform.underwriting.UnderwritingService;
 import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
@@ -50,7 +53,9 @@ public class LoanApplicationService {
     private final UnderwritingService underwritingService;
     private final OfferService offerService;
     private final DisbursementService disbursementService;
+    private final EmiCalculator emiCalculator;
     private final ObjectMapper objectMapper;
+    private final AuditService auditService;
 
     public LoanApplicationService(LoanServiceContext loanServiceContext,
                                    LoanApplicationRepository repository,
@@ -59,7 +64,9 @@ public class LoanApplicationService {
                                    UnderwritingService underwritingService,
                                    OfferService offerService,
                                    DisbursementService disbursementService,
-                                   ObjectMapper objectMapper) {
+                                   EmiCalculator emiCalculator,
+                                   ObjectMapper objectMapper,
+                                   AuditService auditService) {
         this.loanServiceContext = loanServiceContext;
         this.repository = repository;
         this.customerRepository = customerRepository;
@@ -67,7 +74,9 @@ public class LoanApplicationService {
         this.underwritingService = underwritingService;
         this.offerService = offerService;
         this.disbursementService = disbursementService;
+        this.emiCalculator = emiCalculator;
         this.objectMapper = objectMapper;
+        this.auditService = auditService;
     }
 
     public LoanResponse apply(LoanRequest request) {
@@ -103,11 +112,17 @@ public class LoanApplicationService {
     public LoanResponse submit(String referenceNumber) {
         LoanApplication application = getEntity(referenceNumber);
 
+        ApplicationStatus previousStatus = application.getStatus();
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.SUBMITTED);
         application.setStatus(ApplicationStatus.SUBMITTED);
+        auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, application.getStatus());
+        auditService.recordEvent(AuditEventType.APPLICATION_SUBMITTED, "LoanApplication", application.getId(),
+                "Application " + application.getReferenceNumber() + " submitted");
 
+        previousStatus = application.getStatus();
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.UNDERWRITING);
         application.setStatus(ApplicationStatus.UNDERWRITING);
+        auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, application.getStatus());
 
         runUnderwriting(application);
 
@@ -157,6 +172,7 @@ public class LoanApplicationService {
         application.setDecision(decision.getDecision());
         application.setDecisionDetails(toMap(decision));
 
+        ApplicationStatus previousStatus = application.getStatus();
         if (decision.getDecision() == DecisionStatus.APPROVED) {
             ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.OFFERED);
             application.setStatus(ApplicationStatus.OFFERED);
@@ -164,6 +180,78 @@ public class LoanApplicationService {
             ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.DECLINED);
             application.setStatus(ApplicationStatus.DECLINED);
         }
+        if (application.getStatus() != previousStatus) {
+            auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, application.getStatus());
+        }
+    }
+
+    /**
+     * Finalizes the outcome of the financial-analysis / credit-scoring / maker-checker pipeline
+     * (Weeks 4-8) against the application it was run for — called by {@code ApprovalService}'s
+     * {@code openCase} (when the resolved authority level is {@code AUTO}, or the outcome is a
+     * decline, so no human sign-off is needed) and by its checker-decision path (once an
+     * {@code ApprovalCase} reaches {@code APPROVED}/{@code REJECTED}). That pipeline has no
+     * {@code submit()}-equivalent step of its own — the application may still be {@code DRAFT} —
+     * so this advances it through {@code SUBMITTED}/{@code UNDERWRITING} first, without invoking
+     * {@link LoanProcessingStrategy} (this pipeline supplies its own decision; the strategy is
+     * reused only for computing offer terms on approval, see {@link #computeApprovedTerms}).
+     *
+     * <p>A no-op if the application is not at {@code UNDERWRITING} once advanced this far (e.g. a
+     * retried call after the application already reached a terminal state) — a late-arriving
+     * decision on an already-finalized application should not raise an error back through the
+     * decision/approval pipeline that triggered it.
+     */
+    public void applyCreditPipelineOutcome(UUID applicationId, DecisionStatus decision) {
+        LoanApplication application = repository.findById(applicationId)
+                .orElseThrow(() -> new LoanApplicationNotFoundException(applicationId));
+
+        if (application.getStatus() == ApplicationStatus.DRAFT) {
+            advanceStatus(application, ApplicationStatus.SUBMITTED);
+            advanceStatus(application, ApplicationStatus.UNDERWRITING);
+        }
+        if (application.getStatus() != ApplicationStatus.UNDERWRITING) {
+            return;
+        }
+
+        if (decision == DecisionStatus.DECLINED) {
+            application.setDecision(DecisionStatus.DECLINED);
+            advanceStatus(application, ApplicationStatus.DECLINED);
+        } else {
+            LoanResponse terms = computeApprovedTerms(application);
+            application.setDecision(DecisionStatus.APPROVED);
+            application.setDecisionDetails(toMap(terms));
+            advanceStatus(application, ApplicationStatus.OFFERED);
+        }
+        repository.save(application);
+    }
+
+    private void advanceStatus(LoanApplication application, ApplicationStatus target) {
+        ApplicationStatus previousStatus = application.getStatus();
+        ApplicationLifecycle.assertTransition(previousStatus, target);
+        application.setStatus(target);
+        auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, target);
+    }
+
+    /**
+     * Reuses {@link LoanProcessingStrategy} purely to price the approval — {@code interestRate} is
+     * computed unconditionally by every strategy before its own FOIR/LTV branching, so it is safe
+     * to read regardless of what that strategy itself would have decided. The approved amount and
+     * EMI are then computed independently against the full requested amount: this pipeline's
+     * {@code CreditDecision}/{@code ApprovalCase}, not the strategy, is the accept authority here.
+     */
+    private LoanResponse computeApprovedTerms(LoanApplication application) {
+        LoanRequest request = objectMapper.convertValue(application.getRequestDetails(), LoanRequest.class);
+        LoanProcessingStrategy strategy = loanServiceContext.getStrategy(application.getProductType());
+        LoanResponse terms = strategy.processLoan(request);
+
+        BigDecimal approvedAmount = application.getRequestedAmount();
+        terms.setApprovedAmount(approvedAmount);
+        terms.setMonthlyEmi(emiCalculator.calculate(approvedAmount, terms.getInterestRate(), application.getTenureMonths()));
+        terms.setDecision(DecisionStatus.APPROVED);
+        terms.setApplicationReference(application.getReferenceNumber());
+        terms.getReasons().clear();
+        terms.addReason("Approved by the credit scoring / decision pipeline (financial analysis + credit policy rules)");
+        return terms;
     }
 
     /**
@@ -174,11 +262,13 @@ public class LoanApplicationService {
      */
     public LoanResponse sanction(String referenceNumber) {
         LoanApplication application = getEntity(referenceNumber);
+        ApplicationStatus previousStatus = application.getStatus();
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.SANCTIONED);
 
         offerService.sanctionSelectedOffer(application.getId());
 
         application.setStatus(ApplicationStatus.SANCTIONED);
+        auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, application.getStatus());
         repository.save(application);
         return toResponse(application);
     }
@@ -198,8 +288,10 @@ public class LoanApplicationService {
         DisbursementTrancheResponse response = disbursementService.recordTranche(application.getId(), request);
 
         if (response.getDisbursementStatus() == DisbursementStatus.COMPLETED) {
+            ApplicationStatus previousStatus = application.getStatus();
             ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.DISBURSED);
             application.setStatus(ApplicationStatus.DISBURSED);
+            auditService.recordDataChange("LoanApplication", application.getId(), "status", previousStatus, application.getStatus());
             repository.save(application);
         }
 

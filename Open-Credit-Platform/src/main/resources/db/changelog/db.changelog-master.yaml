@@ -101,3 +101,24 @@ databaseChangeLog:
   - include:
       file: db/changelog/changes/034-create-disbursement-tranche.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/035-create-app-user.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/036-seed-demo-users.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/037-create-audit-business-event.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/038-create-audit-data-change.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/039-relax-approval-decision-actor-level.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/040-add-missing-fk-indexes.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelog/changes/041-add-more-missing-fk-indexes.sql
+      relativeToChangelogFile: false

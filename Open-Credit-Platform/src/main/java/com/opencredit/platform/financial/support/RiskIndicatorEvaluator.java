@@ -48,6 +48,9 @@ public class RiskIndicatorEvaluator {
         compare(facts.get(DerivedFinancialFactCode.EBITDA), previousPeriod.ebitda())
                 .ifPresent(triggered -> indicators.put(RiskIndicatorCode.DECLINING_EBITDA, triggered));
 
+        // NET_PROFIT + DEPRECIATION_AMORTIZATION as a cash-flow proxy (adding back the largest
+        // non-cash expense) — the schema has no cash-flow-statement line items to compute a real
+        // operating cash flow from, so this is a deliberate simplification, not the full formula.
         Optional<BigDecimal> netProfit = Optional.ofNullable(facts.get(DerivedFinancialFactCode.NET_PROFIT));
         Optional<BigDecimal> depreciation =
                 Optional.ofNullable(rawValues.get(FinancialLineItemCode.DEPRECIATION_AMORTIZATION));

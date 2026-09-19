@@ -1,5 +1,7 @@
 package com.opencredit.platform.disbursement;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.disbursement.dto.DisbursementResponse;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheDetail;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheRequest;
@@ -47,15 +49,18 @@ public class DisbursementService {
     private final SanctionRepository sanctionRepository;
     private final DisbursementRepository disbursementRepository;
     private final DisbursementTrancheRepository trancheRepository;
+    private final AuditService auditService;
 
     public DisbursementService(LoanApplicationRepository loanApplicationRepository,
                                 SanctionRepository sanctionRepository,
                                 DisbursementRepository disbursementRepository,
-                                DisbursementTrancheRepository trancheRepository) {
+                                DisbursementTrancheRepository trancheRepository,
+                                AuditService auditService) {
         this.loanApplicationRepository = loanApplicationRepository;
         this.sanctionRepository = sanctionRepository;
         this.disbursementRepository = disbursementRepository;
         this.trancheRepository = trancheRepository;
+        this.auditService = auditService;
     }
 
     public DisbursementTrancheResponse recordTranche(UUID applicationId, DisbursementTrancheRequest request) {
@@ -96,6 +101,8 @@ public class DisbursementService {
             throw new DuplicateDisbursementRequestException(request.getRequestReference());
         }
 
+        BigDecimal previousTotal = disbursement.getDisbursedTotal();
+        DisbursementStatus previousStatus = disbursement.getStatus();
         boolean fullyDisbursed = newTotal.compareTo(sanction.getSanctionedAmount()) == 0;
         disbursement.setDisbursedTotal(newTotal);
         disbursement.setStatus(fullyDisbursed ? DisbursementStatus.COMPLETED : DisbursementStatus.IN_PROGRESS);
@@ -104,6 +111,12 @@ public class DisbursementService {
         } catch (ObjectOptimisticLockingFailureException ex) {
             throw new ConcurrentDisbursementConflictException(applicationId);
         }
+        auditService.recordDataChange("Disbursement", disbursement.getId(), "disbursedTotal", previousTotal, newTotal);
+        if (disbursement.getStatus() != previousStatus) {
+            auditService.recordDataChange("Disbursement", disbursement.getId(), "status", previousStatus, disbursement.getStatus());
+        }
+        auditService.recordEvent(AuditEventType.DISBURSEMENT_CREATED, "DisbursementTranche", tranche.getId(),
+                "Tranche " + trancheNumber + " of " + tranche.getAmount() + " for application " + applicationId);
 
         return DisbursementTrancheResponse.builder()
                 .trancheId(tranche.getId())

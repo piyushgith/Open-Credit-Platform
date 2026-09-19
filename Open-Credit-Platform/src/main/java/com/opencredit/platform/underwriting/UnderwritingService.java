@@ -1,5 +1,7 @@
 package com.opencredit.platform.underwriting;
 
+import com.opencredit.platform.audit.AuditService;
+import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.model.ApplicationStatus;
 import com.opencredit.platform.loan.model.LoanApplication;
@@ -35,13 +37,16 @@ public class UnderwritingService {
     private final UnderwritingCaseRepository caseRepository;
     private final UnderwritingAttemptRepository attemptRepository;
     private final LoanApplicationRepository loanApplicationRepository;
+    private final AuditService auditService;
 
     public UnderwritingService(UnderwritingCaseRepository caseRepository,
                                 UnderwritingAttemptRepository attemptRepository,
-                                LoanApplicationRepository loanApplicationRepository) {
+                                LoanApplicationRepository loanApplicationRepository,
+                                AuditService auditService) {
         this.caseRepository = caseRepository;
         this.attemptRepository = attemptRepository;
         this.loanApplicationRepository = loanApplicationRepository;
+        this.auditService = auditService;
     }
 
     /**
@@ -77,18 +82,26 @@ public class UnderwritingService {
                 .active(true)
                 .startedAt(Instant.now())
                 .build();
-        return attemptRepository.save(attempt);
+        UnderwritingAttempt saved = attemptRepository.save(attempt);
+        auditService.recordEvent(AuditEventType.UNDERWRITING_STARTED, "UnderwritingAttempt", saved.getId(),
+                "Cycle " + nextCycle + " started for application " + applicationId);
+        return saved;
     }
 
     public UnderwritingAttempt completeAttempt(UUID attemptId, UnderwritingAttemptStatus outcome,
                                                 Map<String, Object> decisionDetails) {
         UnderwritingAttempt attempt = attemptRepository.findById(attemptId)
                 .orElseThrow(() -> new IllegalStateException("Underwriting attempt not found: " + attemptId));
+        UnderwritingAttemptStatus previousStatus = attempt.getStatus();
         UnderwritingAttemptLifecycle.assertTransition(attempt.getStatus(), outcome);
         attempt.setStatus(outcome);
         attempt.setDecisionDetails(decisionDetails);
         attempt.setCompletedAt(Instant.now());
-        return attemptRepository.save(attempt);
+        UnderwritingAttempt saved = attemptRepository.save(attempt);
+        auditService.recordDataChange("UnderwritingAttempt", saved.getId(), "status", previousStatus, outcome);
+        auditService.recordEvent(AuditEventType.UNDERWRITING_COMPLETED, "UnderwritingAttempt", saved.getId(),
+                "Cycle " + saved.getCycleNumber() + " completed with outcome " + outcome);
+        return saved;
     }
 
     @Transactional(readOnly = true)

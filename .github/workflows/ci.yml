@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main, developer]
+  pull_request:
+    branches: [main, developer]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    # Matches application.properties' defaults (jdbc:postgresql://localhost:5432/open_credit,
+    # postgres/password) exactly, so no DB_URL/DB_USER/DB_PASSWORD overrides are needed here.
+    # Every @SpringBootTest in this project runs its migrations and queries against this real
+    # Postgres — there is no Testcontainers setup (see my_plan/week12-production-hardening-plan.md),
+    # so skipping this service would fail every integration test at context-load, not just skip them.
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_DB: open_credit
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d open_credit"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: Open-Credit-Platform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+          cache-dependency-path: Open-Credit-Platform/pom.xml
+
+      - name: Run tests
+        run: ./mvnw -B test
+
+      - name: Publish test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: Open-Credit-Platform/target/surefire-reports

@@ -42,8 +42,9 @@ public class ApprovalDecision {
     @Column(name = "actor_username", nullable = false)
     private String actorUsername;
 
+    /** Null for a {@code MAKER} row — only a {@code CHECKER}'s level is ever meaningful. */
     @Enumerated(EnumType.STRING)
-    @Column(name = "actor_level", nullable = false)
+    @Column(name = "actor_level")
     private ApprovalLevel actorLevel;
 
     @Enumerated(EnumType.STRING)
