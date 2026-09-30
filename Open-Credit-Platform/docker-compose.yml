@@ -17,9 +17,9 @@ services:
 
   app:
     build: .
-    # No new profile: application.properties already reads DB_URL/DB_USER/DB_PASSWORD via
-    # ${ENV_VAR:default}, so docker-compose only needs to override those three.
+    # Local demo stack: the dev profile supplies the dev JWT secret and keeps the demo logins active.
     environment:
+      SPRING_PROFILES_ACTIVE: dev
       DB_URL: jdbc:postgresql://postgres:5432/open_credit
       DB_USER: postgres
       DB_PASSWORD: password

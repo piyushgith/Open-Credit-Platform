@@ -115,6 +115,40 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void aMakerIsForbiddenFromSanctioningAndDisbursing() throws Exception {
+        String token = login("alice.maker", "maker123");
+
+        mockMvc.perform(post("/api/loans/LN-00000000/sanction").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.errors[0].code").value("ACCESS_DENIED"));
+        mockMvc.perform(post("/api/loans/LN-00000000/disbursements")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "amount": 1000.00, "requestReference": "ROLE-CHECK" }
+                                """))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/audit/business-events").header("Authorization", "Bearer " + token)
+                        .param("entityType", "LoanApplication").param("entityId", java.util.UUID.randomUUID().toString()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void aCheckerIsForbiddenFromApplyingForALoan() throws Exception {
+        String token = login("bob.checker", "checker123");
+
+        mockMvc.perform(post("/api/loans/apply")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "productType": "PERSONAL", "customerId": "%s", "requestedAmount": 100000.00,
+                                  "tenureMonths": 24, "monthlyIncome": 100000.00, "existingEmi": 0.00,
+                                  "employmentType": "SALARIED" }
+                                """.formatted(java.util.UUID.randomUUID())))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void aMakerIsForbiddenFromTheCheckerDecisionEndpoint() throws Exception {
         String token = login("alice.maker", "maker123");
 

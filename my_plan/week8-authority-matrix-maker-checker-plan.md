@@ -79,7 +79,9 @@ still goes to a checker rather than short-circuiting, giving symmetric two-perso
    `productType`/`requestedAmount` (via `CreditDecision.scoreId -> Score.analysisRunId ->
    FinancialAnalysisRun.statementId -> FinancialStatement.applicationId -> LoanApplication`) and the
    score's `riskGrade`. A `DECLINE` outcome or a resolved `AUTO` level both mean "no human sign-off
-   needed" -> `ApprovalNotRequiredException` rather than opening a case.
+   needed" -> `ApprovalNotRequiredException` rather than opening a case. **Superseded (2026-09-30):** a
+   `REFER` never resolves to `AUTO` (floored at `SENIOR_CREDIT_MANAGER`), and no case opens once the
+   application has left DRAFT/UNDERWRITING — see [release-review-fixes-plan.md](release-review-fixes-plan.md).
 4. **Rejected approvals remain in history** — terminal states are never deleted or overwritten;
    `ApprovalDecision` rows are append-only and a case is never re-opened (`decision_id` unique).
 5. **Approval cannot be performed twice** — `ApprovalLifecycle` rejects an action once the case has left

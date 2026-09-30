@@ -6,6 +6,7 @@ import com.opencredit.platform.scoring.dto.ScorecardRuleRequest;
 import com.opencredit.platform.scoring.dto.ScorecardRuleResponse;
 import com.opencredit.platform.scoring.exception.ConcurrentScorecardActivationException;
 import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
+import com.opencredit.platform.scoring.exception.EmptyScorecardException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRuleRangeException;
 import com.opencredit.platform.scoring.exception.OverlappingScorecardRuleException;
@@ -82,7 +83,7 @@ public class ScorecardAdminService {
 
     public ScorecardResponse update(UUID scorecardId, ScorecardRequest request) {
         assertValidRange(request.getMinScore(), request.getBaseScore(), request.getMaxScore());
-        Scorecard scorecard = getEntity(scorecardId);
+        Scorecard scorecard = getEditableEntity(scorecardId);
         if (!scorecard.getName().equals(request.getName())
                 && scorecardRepository.existsByNameAndIdNot(request.getName(), scorecardId)) {
             throw new DuplicateScorecardNameException(request.getName());
@@ -98,13 +99,7 @@ public class ScorecardAdminService {
     }
 
     public void delete(UUID scorecardId) {
-        Scorecard scorecard = getEntity(scorecardId);
-        if (scorecard.isActive()) {
-            throw new ScorecardInUseException(scorecardId, "it is the active scorecard");
-        }
-        if (scoreRepository.existsByScorecardId(scorecardId)) {
-            throw new ScorecardInUseException(scorecardId, "it has already been used to score an analysis run");
-        }
+        Scorecard scorecard = getEditableEntity(scorecardId);
         ruleRepository.deleteAll(ruleRepository.findAllByScorecardIdOrderByFactorCodeAscBandOrderAsc(scorecardId));
         scorecardRepository.delete(scorecard);
     }
@@ -121,6 +116,9 @@ public class ScorecardAdminService {
      */
     public ScorecardResponse activate(UUID scorecardId) {
         Scorecard scorecard = getEntity(scorecardId);
+        if (ruleRepository.findAllByScorecardIdOrderByFactorCodeAscBandOrderAsc(scorecardId).isEmpty()) {
+            throw new EmptyScorecardException(scorecardId);
+        }
         try {
             scorecardRepository.findByActiveTrue().ifPresent(current -> {
                 if (!current.getId().equals(scorecardId)) {
@@ -137,7 +135,7 @@ public class ScorecardAdminService {
     }
 
     public ScorecardRuleResponse addRule(UUID scorecardId, ScorecardRuleRequest request) {
-        getEntity(scorecardId);
+        getEditableEntity(scorecardId);
         assertValidRuleRange(request.getMinValue(), request.getMaxValue());
         assertNoOverlap(scorecardId, request.getFactorCode(), request.getMinValue(), request.getMaxValue(), null);
 
@@ -156,7 +154,7 @@ public class ScorecardAdminService {
     }
 
     public ScorecardRuleResponse updateRule(UUID scorecardId, UUID ruleId, ScorecardRuleRequest request) {
-        getEntity(scorecardId);
+        getEditableEntity(scorecardId);
         ScorecardRule rule = ruleRepository.findById(ruleId)
                 .filter(r -> r.getScorecardId().equals(scorecardId))
                 .orElseThrow(() -> new ScorecardRuleNotFoundException(ruleId));
@@ -174,11 +172,23 @@ public class ScorecardAdminService {
     }
 
     public void deleteRule(UUID scorecardId, UUID ruleId) {
-        getEntity(scorecardId);
+        getEditableEntity(scorecardId);
         ScorecardRule rule = ruleRepository.findById(ruleId)
                 .filter(r -> r.getScorecardId().equals(scorecardId))
                 .orElseThrow(() -> new ScorecardRuleNotFoundException(ruleId));
         ruleRepository.delete(rule);
+    }
+
+    /** Throws 409 if the scorecard is active or has already scored a run: past scores must stay reproducible. */
+    private Scorecard getEditableEntity(UUID scorecardId) {
+        Scorecard scorecard = getEntity(scorecardId);
+        if (scorecard.isActive()) {
+            throw new ScorecardInUseException(scorecardId, "it is the active scorecard");
+        }
+        if (scoreRepository.existsByScorecardId(scorecardId)) {
+            throw new ScorecardInUseException(scorecardId, "it has already been used to score an analysis run");
+        }
+        return scorecard;
     }
 
     private void assertNoOverlap(UUID scorecardId, ScoreFactorCode factorCode, BigDecimal minValue, BigDecimal maxValue,

@@ -63,6 +63,18 @@ class ScorecardAdminIntegrationTest {
         return responseJson.split("\"id\":\"")[1].split("\"")[0];
     }
 
+    /** A scorecard with one rule, so it can be activated. */
+    private String createActivatableScorecard(MockMvc mockMvc, String name) throws Exception {
+        String scorecardId = createScorecard(mockMvc, name, 300, 500, 900);
+        mockMvc.perform(post("/api/scorecards/" + scorecardId + "/rules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "factorCode": "CURRENT_RATIO", "bandOrder": 1, "minValue": null, "maxValue": null, "points": 0 }
+                                """))
+                .andExpect(status().isCreated());
+        return scorecardId;
+    }
+
     private String registerCustomer(MockMvc mockMvc) throws Exception {
         String customerJson = """
                 {
@@ -256,8 +268,8 @@ class ScorecardAdminIntegrationTest {
     @Test
     void activatingAScorecardDeactivatesThePreviouslyActiveOneAndOnlyOneSurvives() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String firstId = createScorecard(mockMvc, randomName("TEST_ACTIVATE_1"), 300, 500, 900);
-        String secondId = createScorecard(mockMvc, randomName("TEST_ACTIVATE_2"), 300, 500, 900);
+        String firstId = createActivatableScorecard(mockMvc, randomName("TEST_ACTIVATE_1"));
+        String secondId = createActivatableScorecard(mockMvc, randomName("TEST_ACTIVATE_2"));
 
         try {
             mockMvc.perform(post("/api/scorecards/" + firstId + "/activate"))
@@ -289,8 +301,8 @@ class ScorecardAdminIntegrationTest {
     @Test
     void concurrentlyActivatingTwoDifferentScorecardsLeavesExactlyOneActive() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String firstId = createScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_1"), 300, 500, 900);
-        String secondId = createScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_2"), 300, 500, 900);
+        String firstId = createActivatableScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_1"));
+        String secondId = createActivatableScorecard(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_2"));
 
         CyclicBarrier barrier = new CyclicBarrier(2);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -340,9 +352,51 @@ class ScorecardAdminIntegrationTest {
     }
 
     @Test
+    void activatingAScorecardWithNoRulesIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String scorecardId = createScorecard(mockMvc, randomName("TEST_ACTIVATE_EMPTY"), 300, 500, 900);
+
+        mockMvc.perform(post("/api/scorecards/" + scorecardId + "/activate"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("EMPTY_SCORECARD"));
+
+        mockMvc.perform(delete("/api/scorecards/" + scorecardId)).andExpect(status().isOk());
+    }
+
+    @Test
+    void changingTheActiveScorecardIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String scorecardId = createActivatableScorecard(mockMvc, randomName("TEST_CHANGE_ACTIVE"));
+
+        try {
+            mockMvc.perform(post("/api/scorecards/" + scorecardId + "/activate"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/scorecards/" + scorecardId + "/rules")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    { "factorCode": "DSCR", "bandOrder": 1, "minValue": null, "maxValue": null, "points": 80 }
+                                    """))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errors[0].code").value("SCORECARD_IN_USE"));
+
+            mockMvc.perform(put("/api/scorecards/" + scorecardId)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    { "name": "%s", "baseScore": 600, "minScore": 300, "maxScore": 900 }
+                                    """.formatted(randomName("TEST_CHANGE_ACTIVE_RENAMED"))))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errors[0].code").value("SCORECARD_IN_USE"));
+        } finally {
+            reactivateSeededScorecard(mockMvc);
+            mockMvc.perform(delete("/api/scorecards/" + scorecardId)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
     void deletingTheActiveScorecardIsRejected() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String scorecardId = createScorecard(mockMvc, randomName("TEST_DELETE_ACTIVE"), 300, 500, 900);
+        String scorecardId = createActivatableScorecard(mockMvc, randomName("TEST_DELETE_ACTIVE"));
 
         try {
             mockMvc.perform(post("/api/scorecards/" + scorecardId + "/activate"))
@@ -360,7 +414,7 @@ class ScorecardAdminIntegrationTest {
     @Test
     void deletingAScorecardAlreadyUsedToScoreAnAnalysisRunIsRejected() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String scorecardId = createScorecard(mockMvc, randomName("TEST_DELETE_IN_USE"), 300, 500, 900);
+        String scorecardId = createActivatableScorecard(mockMvc, randomName("TEST_DELETE_IN_USE"));
 
         try {
             mockMvc.perform(post("/api/scorecards/" + scorecardId + "/activate"))

@@ -9,11 +9,15 @@ import com.opencredit.platform.disbursement.DisbursementService;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheRequest;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheResponse;
 import com.opencredit.platform.disbursement.model.DisbursementStatus;
+import com.opencredit.platform.kyc.model.KycCase;
+import com.opencredit.platform.kyc.model.KycStatus;
+import com.opencredit.platform.kyc.repository.KycCaseRepository;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
 import com.opencredit.platform.loan.dto.PersonalLoanResponse;
 import com.opencredit.platform.loan.dto.VehicleLoanResponse;
 import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
+import com.opencredit.platform.loan.exception.KycNotVerifiedException;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.model.ApplicationStatus;
@@ -56,6 +60,7 @@ public class LoanApplicationService {
     private final EmiCalculator emiCalculator;
     private final ObjectMapper objectMapper;
     private final AuditService auditService;
+    private final KycCaseRepository kycCaseRepository;
 
     public LoanApplicationService(LoanServiceContext loanServiceContext,
                                    LoanApplicationRepository repository,
@@ -66,7 +71,8 @@ public class LoanApplicationService {
                                    DisbursementService disbursementService,
                                    EmiCalculator emiCalculator,
                                    ObjectMapper objectMapper,
-                                   AuditService auditService) {
+                                   AuditService auditService,
+                                   KycCaseRepository kycCaseRepository) {
         this.loanServiceContext = loanServiceContext;
         this.repository = repository;
         this.customerRepository = customerRepository;
@@ -77,6 +83,7 @@ public class LoanApplicationService {
         this.emiCalculator = emiCalculator;
         this.objectMapper = objectMapper;
         this.auditService = auditService;
+        this.kycCaseRepository = kycCaseRepository;
     }
 
     public LoanResponse apply(LoanRequest request) {
@@ -235,9 +242,10 @@ public class LoanApplicationService {
     /**
      * Reuses {@link LoanProcessingStrategy} purely to price the approval — {@code interestRate} is
      * computed unconditionally by every strategy before its own FOIR/LTV branching, so it is safe
-     * to read regardless of what that strategy itself would have decided. The approved amount and
-     * EMI are then computed independently against the full requested amount: this pipeline's
-     * {@code CreditDecision}/{@code ApprovalCase}, not the strategy, is the accept authority here.
+     * to read regardless of what that strategy itself would have decided. This pipeline's
+     * {@code CreditDecision}/{@code ApprovalCase}, not the strategy, is the accept authority here:
+     * the approved amount is the full requested amount, except that a product cap the strategy
+     * applied (a positive amount below the request, e.g. the vehicle LTV cap) still holds.
      */
     private LoanResponse computeApprovedTerms(LoanApplication application) {
         LoanRequest request = objectMapper.convertValue(application.getRequestDetails(), LoanRequest.class);
@@ -245,6 +253,10 @@ public class LoanApplicationService {
         LoanResponse terms = strategy.processLoan(request);
 
         BigDecimal approvedAmount = application.getRequestedAmount();
+        BigDecimal strategyAmount = terms.getApprovedAmount();
+        if (strategyAmount != null && strategyAmount.signum() > 0 && strategyAmount.compareTo(approvedAmount) < 0) {
+            approvedAmount = strategyAmount;
+        }
         terms.setApprovedAmount(approvedAmount);
         terms.setMonthlyEmi(emiCalculator.calculate(approvedAmount, terms.getInterestRate(), application.getTenureMonths()));
         terms.setDecision(DecisionStatus.APPROVED);
@@ -259,11 +271,19 @@ public class LoanApplicationService {
      * transition first (preserving the pre-existing "sanction before submit is an illegal
      * transition" behavior) before asking {@link OfferService} for the domain result — a missing
      * selection surfaces as {@code NoOfferSelectedException}, not as a transition error.
+     * Requires the application's KYC case to be VERIFIED.
      */
     public LoanResponse sanction(String referenceNumber) {
         LoanApplication application = getEntity(referenceNumber);
         ApplicationStatus previousStatus = application.getStatus();
         ApplicationLifecycle.assertTransition(application.getStatus(), ApplicationStatus.SANCTIONED);
+
+        KycStatus kycStatus = kycCaseRepository.findByApplicationId(application.getId())
+                .map(KycCase::getStatus)
+                .orElse(null);
+        if (kycStatus != KycStatus.VERIFIED) {
+            throw new KycNotVerifiedException(referenceNumber, kycStatus);
+        }
 
         offerService.sanctionSelectedOffer(application.getId());
 

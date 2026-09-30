@@ -8,6 +8,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +30,7 @@ public class FinancialStatementController {
         this.financialStatementService = financialStatementService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping
     @Operation(summary = "Submit a financial statement for a loan application")
     public ResponseEntity<ApiResponse<FinancialStatementResponse>> submit(@PathVariable String reference,
@@ -50,6 +52,7 @@ public class FinancialStatementController {
         return ResponseEntity.ok(ApiResponse.success(financialStatementService.get(reference, statementId)));
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping("/{statementId}/analyze")
     @Operation(summary = "Run the financial analysis engine against a statement's line items")
     public ResponseEntity<ApiResponse<FinancialAnalysisRunResponse>> analyze(@PathVariable String reference,

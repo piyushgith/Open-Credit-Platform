@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.Locale;
 import java.util.UUID;
 
 @Service
@@ -23,8 +24,9 @@ public class CustomerService {
     }
 
     public CustomerResponse register(CustomerRequest request) {
-        if (repository.existsByEmail(request.getEmail())) {
-            throw new DuplicateCustomerException("email", request.getEmail());
+        String email = request.getEmail().toLowerCase(Locale.ROOT);
+        if (repository.existsByEmail(email)) {
+            throw new DuplicateCustomerException("email", email);
         }
         if (repository.existsByPhoneNumber(request.getPhoneNumber())) {
             throw new DuplicateCustomerException("phoneNumber", request.getPhoneNumber());
@@ -36,7 +38,7 @@ public class CustomerService {
         Customer customer = Customer.builder()
                 .id(UUID.randomUUID())
                 .fullName(request.getFullName())
-                .email(request.getEmail())
+                .email(email)
                 .phoneNumber(request.getPhoneNumber())
                 .dateOfBirth(request.getDateOfBirth())
                 .panNumber(request.getPanNumber())
@@ -64,8 +66,13 @@ public class CustomerService {
                 .email(customer.getEmail())
                 .phoneNumber(customer.getPhoneNumber())
                 .dateOfBirth(customer.getDateOfBirth())
-                .panNumber(customer.getPanNumber())
+                .panNumber(maskPan(customer.getPanNumber()))
                 .createdAt(customer.getCreatedAt())
                 .build();
+    }
+
+    /** Shows only the last 4 characters of the PAN, e.g. {@code ******234F}. */
+    private static String maskPan(String panNumber) {
+        return "*".repeat(panNumber.length() - 4) + panNumber.substring(panNumber.length() - 4);
     }
 }

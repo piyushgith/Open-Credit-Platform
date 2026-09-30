@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -29,6 +30,7 @@ public class OfferController {
         this.offerService = offerService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping
     @Operation(summary = "Create an offer from the application's approved underwriting decision")
     public ResponseEntity<ApiResponse<OfferResponse>> create(@PathVariable String reference,
@@ -44,6 +46,7 @@ public class OfferController {
         return ResponseEntity.ok(ApiResponse.success(offerService.listOffers(reference)));
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping("/{offerId}/select")
     @Operation(summary = "Select an offer, making it eligible for sanction")
     public ResponseEntity<ApiResponse<OfferResponse>> select(@PathVariable String reference,

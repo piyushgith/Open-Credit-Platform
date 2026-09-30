@@ -66,7 +66,9 @@ pattern as `approval_decision`'s `UNIQUE (approval_case_id, role)`.
    `ApplicationLifecycle.assertTransition` first (preserves the existing
    `sanctionBeforeSubmitIsRejectedAsIllegalTransition` test), then delegates to
    `OfferService.sanctionSelectedOffer`, which requires a `SELECTED` offer (`NoOfferSelectedException`)
-   and no pre-existing `Sanction` (`DuplicateSanctionException`, defensive).
+   and no pre-existing `Sanction` (`DuplicateSanctionException`, defensive). Since 2026-09-30 it also
+   requires the application's KYC case to be `VERIFIED` (`KycNotVerifiedException`, 409) — see
+   [release-review-fixes-plan.md](release-review-fixes-plan.md).
 4. **Disbursement requires sanctioned offer** — `DisbursementService.recordTranche` looks up the
    `Sanction` by `applicationId`; none found -> `SanctionNotFoundException`.
 5. **Total disbursed amount cannot exceed sanctioned amount** — `disbursedTotal + amount <=

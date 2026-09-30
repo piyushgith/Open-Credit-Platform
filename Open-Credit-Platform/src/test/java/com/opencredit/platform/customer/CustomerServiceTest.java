@@ -106,6 +106,6 @@ class CustomerServiceTest {
         CustomerResponse response = new CustomerService(repository).findById(id);
 
         assertThat(response.getId()).isEqualTo(id);
-        assertThat(response.getPanNumber()).isEqualTo("ABCDE1234F");
+        assertThat(response.getPanNumber()).isEqualTo("******234F");
     }
 }

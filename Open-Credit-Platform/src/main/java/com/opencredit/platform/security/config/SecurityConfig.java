@@ -18,9 +18,9 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 /**
  * Stateless JWT security: every endpoint requires a valid {@code Authorization: Bearer <token>}
  * except login, the OpenAPI/Swagger UI, and {@code /actuator/health}/{@code /actuator/info}.
- * {@code @EnableMethodSecurity} turns on the {@code @PreAuthorize} annotations added to the
- * maker/checker endpoints and the three admin-config controllers; no other endpoint gets
- * role-specific gating this week — see the Week 10 plan's "Out of scope."
+ * {@code @EnableMethodSecurity} turns on the controllers' {@code @PreAuthorize} annotations:
+ * MAKER/ADMIN for intake and credit-pipeline writes, CHECKER/ADMIN for verification, sanction,
+ * disbursement and audit reads, ADMIN for the three admin-config controllers.
  */
 @Configuration
 @EnableWebSecurity
@@ -41,7 +41,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login").permitAll()
-                        .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .requestMatchers("/actuator/health", "/actuator/info").permitAll()
                         .anyRequest().authenticated())
                 .exceptionHandling(handling -> handling

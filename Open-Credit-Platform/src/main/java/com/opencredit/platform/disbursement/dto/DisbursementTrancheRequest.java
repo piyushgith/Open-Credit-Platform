@@ -1,8 +1,10 @@
 package com.opencredit.platform.disbursement.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.math.BigDecimal;
@@ -17,8 +19,10 @@ public class DisbursementTrancheRequest {
 
     @NotNull
     @Positive
+    @Digits(integer = 17, fraction = 2)
     private BigDecimal amount;
 
     @NotBlank
+    @Size(max = 120)
     private String requestReference;
 }

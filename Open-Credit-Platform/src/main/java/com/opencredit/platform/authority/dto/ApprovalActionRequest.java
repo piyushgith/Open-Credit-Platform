@@ -2,6 +2,7 @@ package com.opencredit.platform.authority.dto;
 
 import com.opencredit.platform.authority.model.ApprovalOutcome;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 /**
@@ -16,5 +17,6 @@ public class ApprovalActionRequest {
     @NotNull
     private ApprovalOutcome outcome;
 
+    @Size(max = 1000)
     private String comment;
 }

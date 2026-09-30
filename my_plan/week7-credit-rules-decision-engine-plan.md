@@ -41,7 +41,7 @@ cross-module-repository pattern `ScoreService` already uses to read `financial`/
 | Rule inputs span two sources, so a new spanning enum is needed | `CreditRuleFactorCode` — distinct from `FinancialRatioCode`/`RiskIndicatorCode`/`RiskGrade`, exactly the precedent Week 6 set for `ScoreFactorCode` ("a new enum ... since it spans multiple sources"). Values: `TOTAL_SCORE`, `RISK_GRADE` (from `Score`); all 11 `FinancialRatioCode` names (from `FinancialRatio`, via the run); all 6 `RiskIndicatorCode` names (from `RiskIndicator`, via the run, encoded `1`/`0` — same encoding Week 6 used for `DECLINING_REVENUE`). `EMI_TO_INCOME` is deliberately excluded: it already feeds the score itself, so re-testing it in policy rules would be duplicate business logic against the same raw fact. |
 | `RISK_GRADE` as a number | Ordinal encoding `A=5, B=4, C=3, D=2, F=1` (higher is better), so a rule like `RISK_GRADE >= 3` reads as "C or better." Documented on the enum/engine, same style as the `DECLINING_REVENUE` 1/0 encoding. |
 | Comparison operator | New `ComparisonOperator` enum: `GTE, LTE, GT, LT, EQ, NEQ`, each with a pure `evaluate(BigDecimal actual, BigDecimal threshold)`. |
-| Missing inputs | A rule whose factor can't be resolved for this run (ratio not persisted, e.g. zero-denominator) is skipped entirely — no `RuleResult` row, no effect on the outcome. Same "absence over defaulting" rule as Weeks 4-6. |
+| Missing inputs | A rule whose factor can't be resolved for this run (ratio not persisted, e.g. zero-denominator) is skipped entirely — no `RuleResult` row, no effect on the outcome. Same "absence over defaulting" rule as Weeks 4-6. **Superseded (2026-09-30):** a missing input on a `HARD` rule is now recorded (null `actualValue`, not passed) and forces `REFER`; `SOFT` rules keep this skip — see [release-review-fixes-plan.md](release-review-fixes-plan.md). |
 | Decision outcome | `outcome = DECLINE` if any **evaluated** `HARD` rule fails; else `REFER` if any evaluated `SOFT` rule fails; else `APPROVE` if at least one rule was evaluated and all passed; else (**zero** rules evaluable — e.g. every configured factor's data is missing) `REFER`, never `APPROVE` — a decision can't default to approval on no evidence ("accuracy > speed"). |
 | `DecisionOutcome` is its own enum, not `loan.model.DecisionStatus` | `APPROVE/REFER/DECLINE` (present tense, matching the roadmap literally) in the new `decision` module — reusing `loan`'s `APPROVED/REFERRED/DECLINED` would both mismatch naming and create an unwanted `decision -> loan` enum dependency for a semantically different, later-stage decision. |
 | Required authority (placeholder for Week 8) | Fixed, documented mapping on a new `RequiredAuthority` enum (`AUTO, CREDIT_OFFICER, SENIOR_CREDIT_MANAGER`) — **not** the real `AuthorityMatrix` (loan amount / branch / product), which is Week 8's job per the roadmap. `RequiredAuthority.forOutcome(outcome, riskGrade)`: `DECLINE` -> `AUTO`; `APPROVE` with grade `A`/`B` -> `AUTO`, grade `C`/`D`/`F` -> `CREDIT_OFFICER`; `REFER` -> `SENIOR_CREDIT_MANAGER`. Same "fixed enum, not a table" precedent as `RiskGrade`'s cut-offs. |
@@ -112,7 +112,8 @@ cross-module-repository pattern `ScoreService` already uses to read `financial`/
   `GET` lists.
 - `CreditPolicyAdminService`/`CreditPolicyAdminController` (`/api/credit-policies`): full CRUD +
   activate for `CreditPolicy`, add/update/delete for `CreditRule`, mirroring
-  `ScorecardAdminService`/`ScorecardAdminController` exactly.
+  `ScorecardAdminService`/`ScorecardAdminController` exactly. (Since 2026-09-30, rules of an active or
+  already-used policy are immutable and activation needs at least one rule — see [release-review-fixes-plan.md](release-review-fixes-plan.md).)
 - `GlobalExceptionHandler`: one `@ExceptionHandler` per new exception, following the existing
   status-code conventions (`404` not-found, `409` conflict/duplicate/in-use).
 
@@ -120,7 +121,8 @@ cross-module-repository pattern `ScoreService` already uses to read `financial`/
 
 - `DecisionEngineTest` (pure) — a `HARD` rule failing declines regardless of other passes; a
   `SOFT` rule failing (with all `HARD` rules passing) refers; all rules passing approves; a
-  missing input skips only that rule; zero evaluable rules refers (not approves);
+  missing input skips only that rule (superseded for `HARD` rules, which now refer — see
+  [release-review-fixes-plan.md](release-review-fixes-plan.md)); zero evaluable rules refers (not approves);
   `RequiredAuthority` mapping for every `(outcome, riskGrade)` combination named above;
   `RISK_GRADE` ordinal comparison at each boundary; deterministic repeatability.
 - `DecisionIntegrationTest` (new, `@SpringBootTest` MockMvc style, mirrors

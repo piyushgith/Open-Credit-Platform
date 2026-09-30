@@ -81,10 +81,26 @@ class DecisionEngineTest {
     }
 
     @Test
-    void aMissingInputSkipsOnlyThatRule() {
+    void aMissingHardInputRefersInsteadOfApproving() {
         List<RuleCondition> rules = List.of(
                 rule(CreditRuleFactorCode.TOTAL_SCORE, ComparisonOperator.GTE, "700", RuleSeverity.HARD),
                 rule(CreditRuleFactorCode.DSCR, ComparisonOperator.GTE, "1.5", RuleSeverity.HARD));
+
+        DecisionResult result = engine.evaluate(inputs(CreditRuleFactorCode.TOTAL_SCORE, "750"), rules, RiskGrade.A);
+
+        assertThat(result.outcome()).isEqualTo(DecisionOutcome.REFER);
+        assertThat(result.ruleOutcomes()).hasSize(2);
+        RuleOutcome dscr = result.ruleOutcomes().get(1);
+        assertThat(dscr.factorCode()).isEqualTo(CreditRuleFactorCode.DSCR);
+        assertThat(dscr.actualValue()).isNull();
+        assertThat(dscr.passed()).isFalse();
+    }
+
+    @Test
+    void aMissingSoftInputSkipsOnlyThatRule() {
+        List<RuleCondition> rules = List.of(
+                rule(CreditRuleFactorCode.TOTAL_SCORE, ComparisonOperator.GTE, "700", RuleSeverity.HARD),
+                rule(CreditRuleFactorCode.CURRENT_RATIO, ComparisonOperator.GTE, "1.0", RuleSeverity.SOFT));
 
         DecisionResult result = engine.evaluate(inputs(CreditRuleFactorCode.TOTAL_SCORE, "750"), rules, RiskGrade.A);
 
@@ -93,9 +109,20 @@ class DecisionEngineTest {
     }
 
     @Test
+    void aMissingHardInputStillDeclinesWhenAnotherHardRuleFails() {
+        List<RuleCondition> rules = List.of(
+                rule(CreditRuleFactorCode.TOTAL_SCORE, ComparisonOperator.GTE, "700", RuleSeverity.HARD),
+                rule(CreditRuleFactorCode.DSCR, ComparisonOperator.GTE, "1.5", RuleSeverity.HARD));
+
+        DecisionResult result = engine.evaluate(inputs(CreditRuleFactorCode.TOTAL_SCORE, "650"), rules, RiskGrade.C);
+
+        assertThat(result.outcome()).isEqualTo(DecisionOutcome.DECLINE);
+    }
+
+    @Test
     void zeroEvaluableRulesRefersRatherThanApproves() {
         List<RuleCondition> rules = List.of(
-                rule(CreditRuleFactorCode.TOTAL_SCORE, ComparisonOperator.GTE, "700", RuleSeverity.HARD));
+                rule(CreditRuleFactorCode.CURRENT_RATIO, ComparisonOperator.GTE, "1.0", RuleSeverity.SOFT));
 
         DecisionResult result = engine.evaluate(Map.of(), rules, RiskGrade.A);
 

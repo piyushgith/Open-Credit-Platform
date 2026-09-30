@@ -10,6 +10,7 @@ import com.opencredit.platform.decision.exception.CreditPolicyNotFoundException;
 import com.opencredit.platform.decision.exception.CreditRuleNotFoundException;
 import com.opencredit.platform.decision.exception.DuplicateCreditPolicyNameException;
 import com.opencredit.platform.decision.exception.DuplicateCreditRuleFactorException;
+import com.opencredit.platform.decision.exception.EmptyCreditPolicyException;
 import com.opencredit.platform.decision.model.CreditPolicy;
 import com.opencredit.platform.decision.model.CreditRule;
 import com.opencredit.platform.decision.repository.CreditDecisionRepository;
@@ -85,13 +86,7 @@ public class CreditPolicyAdminService {
     }
 
     public void delete(UUID policyId) {
-        CreditPolicy policy = getEntity(policyId);
-        if (policy.isActive()) {
-            throw new CreditPolicyInUseException(policyId, "it is the active credit policy");
-        }
-        if (decisionRepository.existsByPolicyId(policyId)) {
-            throw new CreditPolicyInUseException(policyId, "it has already been used to decide a score");
-        }
+        CreditPolicy policy = getEditableEntity(policyId);
         ruleRepository.deleteAll(ruleRepository.findAllByPolicyIdOrderByRuleOrderAsc(policyId));
         policyRepository.delete(policy);
     }
@@ -108,6 +103,9 @@ public class CreditPolicyAdminService {
      */
     public CreditPolicyResponse activate(UUID policyId) {
         CreditPolicy policy = getEntity(policyId);
+        if (ruleRepository.findAllByPolicyIdOrderByRuleOrderAsc(policyId).isEmpty()) {
+            throw new EmptyCreditPolicyException(policyId);
+        }
         try {
             policyRepository.findByActiveTrue().ifPresent(current -> {
                 if (!current.getId().equals(policyId)) {
@@ -124,7 +122,7 @@ public class CreditPolicyAdminService {
     }
 
     public CreditRuleResponse addRule(UUID policyId, CreditRuleRequest request) {
-        getEntity(policyId);
+        getEditableEntity(policyId);
         if (ruleRepository.findByPolicyIdAndFactorCode(policyId, request.getFactorCode()).isPresent()) {
             throw new DuplicateCreditRuleFactorException(request.getFactorCode());
         }
@@ -145,7 +143,7 @@ public class CreditPolicyAdminService {
     }
 
     public CreditRuleResponse updateRule(UUID policyId, UUID ruleId, CreditRuleRequest request) {
-        getEntity(policyId);
+        getEditableEntity(policyId);
         CreditRule rule = getRuleEntity(policyId, ruleId);
 
         ruleRepository.findByPolicyIdAndFactorCode(policyId, request.getFactorCode())
@@ -166,9 +164,21 @@ public class CreditPolicyAdminService {
     }
 
     public void deleteRule(UUID policyId, UUID ruleId) {
-        getEntity(policyId);
+        getEditableEntity(policyId);
         CreditRule rule = getRuleEntity(policyId, ruleId);
         ruleRepository.delete(rule);
+    }
+
+    /** Throws 409 if the policy is active or has already decided a score: past decisions must stay reproducible. */
+    private CreditPolicy getEditableEntity(UUID policyId) {
+        CreditPolicy policy = getEntity(policyId);
+        if (policy.isActive()) {
+            throw new CreditPolicyInUseException(policyId, "it is the active credit policy");
+        }
+        if (decisionRepository.existsByPolicyId(policyId)) {
+            throw new CreditPolicyInUseException(policyId, "it has already been used to decide a score");
+        }
+        return policy;
     }
 
     private CreditRule getRuleEntity(UUID policyId, UUID ruleId) {

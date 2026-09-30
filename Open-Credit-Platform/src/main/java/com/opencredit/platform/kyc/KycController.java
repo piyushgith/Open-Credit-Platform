@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +26,7 @@ public class KycController {
         this.kycService = kycService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping
     @Operation(summary = "Initiate a KYC case for a loan application")
     public ResponseEntity<ApiResponse<KycCaseResponse>> initiate(@PathVariable String reference) {
@@ -37,12 +39,14 @@ public class KycController {
         return ResponseEntity.ok(ApiResponse.success(kycService.get(reference)));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/verify")
     @Operation(summary = "Mark a pending KYC case as verified")
     public ResponseEntity<ApiResponse<KycCaseResponse>> verify(@PathVariable String reference) {
         return ResponseEntity.ok(ApiResponse.success(kycService.verify(reference)));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/reject")
     @Operation(summary = "Mark a pending KYC case as rejected")
     public ResponseEntity<ApiResponse<KycCaseResponse>> reject(@PathVariable String reference,

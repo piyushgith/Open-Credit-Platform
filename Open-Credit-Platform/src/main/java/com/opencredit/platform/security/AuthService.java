@@ -17,20 +17,24 @@ public class AuthService {
     private final AppUserRepository appUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
+    private final String unknownUserHash;
 
     public AuthService(AppUserRepository appUserRepository, PasswordEncoder passwordEncoder,
                         JwtTokenService jwtTokenService) {
         this.appUserRepository = appUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
+        this.unknownUserHash = passwordEncoder.encode("unknown-user");
     }
 
     public LoginResponse login(LoginRequest request) {
         AppUser user = appUserRepository.findByUsernameIgnoreCase(request.getUsername())
                 .filter(AppUser::isActive)
-                .orElseThrow(InvalidCredentialsException::new);
+                .orElse(null);
 
-        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+        // Unknown/inactive users still pay for a BCrypt check so response time does not reveal them.
+        String passwordHash = user != null ? user.getPasswordHash() : unknownUserHash;
+        if (!passwordEncoder.matches(request.getPassword(), passwordHash) || user == null) {
             throw new InvalidCredentialsException();
         }
 

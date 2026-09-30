@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 import java.time.LocalDate;
@@ -13,10 +14,12 @@ import java.time.LocalDate;
 public class CustomerRequest {
 
     @NotBlank
+    @Size(max = 160)
     private String fullName;
 
     @NotBlank
     @Email
+    @Size(max = 160)
     private String email;
 
     @NotBlank

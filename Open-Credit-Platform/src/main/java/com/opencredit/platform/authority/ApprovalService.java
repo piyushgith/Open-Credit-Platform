@@ -33,6 +33,8 @@ import com.opencredit.platform.financial.model.FinancialStatement;
 import com.opencredit.platform.financial.repository.FinancialAnalysisRunRepository;
 import com.opencredit.platform.financial.repository.FinancialStatementRepository;
 import com.opencredit.platform.loan.LoanApplicationService;
+import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
+import com.opencredit.platform.loan.model.ApplicationStatus;
 import com.opencredit.platform.loan.model.DecisionStatus;
 import com.opencredit.platform.loan.model.LoanApplication;
 import com.opencredit.platform.loan.repository.LoanApplicationRepository;
@@ -112,6 +114,7 @@ public class ApprovalService {
      * {@code noRollbackFor} is required: {@link ApprovalNotRequiredException} is thrown on the very
      * same "no case needed" paths that just finalized the application, and the default rollback-on-
      * any-{@code RuntimeException} behavior would otherwise discard that finalization.
+     * Throws 409 if the application is no longer DRAFT or UNDERWRITING; a REFER never resolves to AUTO.
      */
     @Transactional(noRollbackFor = ApprovalNotRequiredException.class)
     public ApprovalCaseResponse openCase(UUID decisionId) {
@@ -122,6 +125,11 @@ public class ApprovalService {
         }
 
         LoanContext context = resolveContext(decision);
+        ApplicationStatus applicationStatus = context.application().getStatus();
+        if (applicationStatus != ApplicationStatus.DRAFT && applicationStatus != ApplicationStatus.UNDERWRITING) {
+            throw new IllegalApplicationTransitionException(applicationStatus,
+                    decision.getOutcome() == DecisionOutcome.DECLINE ? ApplicationStatus.DECLINED : ApplicationStatus.OFFERED);
+        }
 
         if (decision.getOutcome() == DecisionOutcome.DECLINE) {
             loanApplicationService.applyCreditPipelineOutcome(context.application().getId(), DecisionStatus.DECLINED);
@@ -134,6 +142,10 @@ public class ApprovalService {
                         context.application().getRequestedAmount())
                 .map(AuthorityMatrixEntry::getRequiredLevel)
                 .orElseThrow(NoMatchingAuthorityMatrixEntryException::new);
+        // A REFER needs human sign-off even where the matrix would auto-approve (RequiredAuthority.forOutcome).
+        if (decision.getOutcome() == DecisionOutcome.REFER && requiredLevel == ApprovalLevel.AUTO) {
+            requiredLevel = ApprovalLevel.SENIOR_CREDIT_MANAGER;
+        }
 
         if (requiredLevel == ApprovalLevel.AUTO) {
             loanApplicationService.applyCreditPipelineOutcome(context.application().getId(), DecisionStatus.APPROVED);

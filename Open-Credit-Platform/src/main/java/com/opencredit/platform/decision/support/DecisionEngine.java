@@ -21,10 +21,10 @@ import java.util.Map;
  *
  * <p>A rule's set is implicitly ANDed: a failed {@code HARD} rule forces {@code DECLINE}; a
  * failed {@code SOFT} rule (with every {@code HARD} rule passing) forces {@code REFER}; all rules
- * passing (with at least one evaluated) approves. A rule whose input value is missing is simply
- * left out of the result — never defaulted, never thrown — same missing-propagates rule Weeks
- * 4-6 established. A decision with zero evaluable rules refers rather than approves: deterministic
- * approval requires at least one satisfied rule, never an absence of evidence.
+ * passing (with at least one evaluated) approves. A {@code HARD} rule whose input value is missing
+ * is recorded as not passed (null {@code actualValue}) and forces {@code REFER}; a {@code SOFT}
+ * rule with a missing input is left out of the result. A decision with zero evaluable rules refers
+ * rather than approves.
  */
 @Component
 public class DecisionEngine {
@@ -49,10 +49,17 @@ public class DecisionEngine {
         List<RuleOutcome> outcomes = new ArrayList<>();
         boolean anyHardFailed = false;
         boolean anySoftFailed = false;
+        boolean anyHardInputMissing = false;
 
         for (RuleCondition rule : rules) {
             BigDecimal actual = inputs.get(rule.factorCode());
             if (actual == null) {
+                if (rule.severity() == RuleSeverity.HARD) {
+                    anyHardInputMissing = true;
+                    outcomes.add(new RuleOutcome(rule.factorCode(), rule.operator(), rule.thresholdValue(), null,
+                            rule.severity(), false, rule.factorCode() + " is missing, so HARD rule "
+                            + rule.operator() + " " + rule.thresholdValue() + " cannot be evaluated"));
+                }
                 continue;
             }
 
@@ -73,7 +80,7 @@ public class DecisionEngine {
         DecisionOutcome outcome;
         if (anyHardFailed) {
             outcome = DecisionOutcome.DECLINE;
-        } else if (anySoftFailed || outcomes.isEmpty()) {
+        } else if (anySoftFailed || anyHardInputMissing || outcomes.isEmpty()) {
             outcome = DecisionOutcome.REFER;
         } else {
             outcome = DecisionOutcome.APPROVE;

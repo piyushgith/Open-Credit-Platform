@@ -91,6 +91,10 @@ OFFER_ID=$(echo "$OFFER" | jq -r '.data.id')
 curl -s -X POST "$BASE_URL/api/loans/$REFERENCE/offers/$OFFER_ID/select" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
 echo "offer $OFFER_ID selected"
 
+bold "Verifying KYC (sanction requires a VERIFIED KYC case)"
+curl -s -X POST "$BASE_URL/api/loans/$REFERENCE/kyc" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
+curl -s -X POST "$BASE_URL/api/loans/$REFERENCE/kyc/verify" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -c '.data'
+
 bold "Sanctioning"
 curl -s -X POST "$BASE_URL/api/loans/$REFERENCE/sanction" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -c '.data'
 
@@ -212,7 +216,9 @@ else
   curl -s -X POST "$BASE_URL/api/loans/$REFERENCE_B/offers/$OFFER_ID_B/select" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
   echo "offer $OFFER_ID_B selected"
 
-  bold "Sanctioning and disbursing in full"
+  bold "Verifying KYC, sanctioning and disbursing in full"
+  curl -s -X POST "$BASE_URL/api/loans/$REFERENCE_B/kyc" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
+  curl -s -X POST "$BASE_URL/api/loans/$REFERENCE_B/kyc/verify" -H "Authorization: Bearer $ADMIN_TOKEN" > /dev/null
   curl -s -X POST "$BASE_URL/api/loans/$REFERENCE_B/sanction" -H "Authorization: Bearer $ADMIN_TOKEN" | jq -c '.data'
   curl -s -X POST "$BASE_URL/api/loans/$REFERENCE_B/disbursements" \
     -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \

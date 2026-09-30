@@ -18,7 +18,9 @@ import java.util.Optional;
  * expense, short-term debt, inventory).
  *
  * <p>A ratio whose inputs are missing, or whose denominator is zero, is simply left out of the
- * result — never defaulted to zero, never thrown. Every result is rounded to
+ * result — never defaulted to zero, never thrown. The leverage ratios (debt/equity, debt/EBITDA)
+ * are also left out when equity or EBITDA is negative: a negative denominator would read as low
+ * leverage. Every result is rounded to
  * {@value #RATIO_SCALE} decimal places, a deliberately finer scale than the money scale used for
  * line items/derived facts since ratios are dimensionless, not currency.
  *
@@ -47,11 +49,11 @@ public class RatioCalculator {
                         raw(rawValues, FinancialLineItemCode.CURRENT_LIABILITIES)));
 
         put(ratios, FinancialRatioCode.DEBT_TO_EQUITY,
-                divide(fact(facts, DerivedFinancialFactCode.TOTAL_DEBT),
+                divideByPositive(fact(facts, DerivedFinancialFactCode.TOTAL_DEBT),
                         raw(rawValues, FinancialLineItemCode.EQUITY)));
 
         put(ratios, FinancialRatioCode.DEBT_TO_EBITDA,
-                divide(fact(facts, DerivedFinancialFactCode.TOTAL_DEBT),
+                divideByPositive(fact(facts, DerivedFinancialFactCode.TOTAL_DEBT),
                         fact(facts, DerivedFinancialFactCode.EBITDA)));
 
         put(ratios, FinancialRatioCode.INTEREST_COVERAGE,
@@ -120,5 +122,12 @@ public class RatioCalculator {
             return Optional.empty();
         }
         return Optional.of(numerator.get().divide(denominator.get(), RATIO_SCALE, ROUNDING));
+    }
+
+    private static Optional<BigDecimal> divideByPositive(Optional<BigDecimal> numerator, Optional<BigDecimal> denominator) {
+        if (denominator.isEmpty() || denominator.get().signum() <= 0) {
+            return Optional.empty();
+        }
+        return divide(numerator, denominator);
     }
 }

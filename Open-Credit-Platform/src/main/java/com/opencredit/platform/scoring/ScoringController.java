@@ -5,6 +5,7 @@ import com.opencredit.platform.scoring.dto.ScoreResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -25,6 +26,7 @@ public class ScoringController {
         this.scoreService = scoreService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping
     @Operation(summary = "Score a financial analysis run against the active scorecard")
     public ResponseEntity<ApiResponse<ScoreResponse>> score(@PathVariable String reference,

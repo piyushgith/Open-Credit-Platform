@@ -133,11 +133,16 @@ the note below). Run `./mvnw test` from `Open-Credit-Platform/` with Postgres re
 ```bash
 cd Open-Credit-Platform
 docker compose up postgres -d      # or point DB_URL/DB_USER/DB_PASSWORD at your own instance
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
 
+The `dev` profile (`application-dev.properties`) supplies a local-only JWT secret and keeps the demo
+logins from `036-seed-demo-users.sql` active. Without it the app refuses to start unless
+`JWT_SECRET` is set, and changeset `043` deactivates the demo logins on any database migrated
+without the `demo` Liquibase context.
+
 Or run everything (app + Postgres) in containers: `docker compose up --build` from the same
-directory. API docs at `http://localhost:8080/swagger-ui.html`.
+directory (the compose file sets the `dev` profile). API docs at `http://localhost:8080/swagger-ui.html`.
 
 ## API Examples
 

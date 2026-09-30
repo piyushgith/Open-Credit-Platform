@@ -21,8 +21,8 @@ import java.util.UUID;
  * against, whether it {@code passed}, and a human-readable {@code description} — this is
  * "DecisionReason": rather than a separate persisted concept, the reason for the decision is
  * simply the description of each rule that failed (or, for context, passed). A row exists for
- * every rule whose input was resolvable — not just the failed ones — same audit-everything
- * precedent as {@code RiskFactor}/{@code RiskIndicator}.
+ * every rule whose input was resolvable, plus every HARD rule whose input was missing
+ * ({@code actualValue} null, not passed).
  */
 @Entity
 @Table(name = "rule_result")
@@ -49,7 +49,7 @@ public class RuleResult {
     @Column(name = "threshold_value", nullable = false)
     private BigDecimal thresholdValue;
 
-    @Column(name = "actual_value", nullable = false)
+    @Column(name = "actual_value")
     private BigDecimal actualValue;
 
     @Enumerated(EnumType.STRING)

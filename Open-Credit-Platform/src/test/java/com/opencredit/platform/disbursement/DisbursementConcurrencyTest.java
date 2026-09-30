@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.concurrent.DelegatingSecurityContextCallable;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -32,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * exactly equal 250,000 times however many requests actually won.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@WithMockUser(roles = "ADMIN")
 class DisbursementConcurrencyTest {
 
     @Autowired
@@ -49,8 +52,8 @@ class DisbursementConcurrencyTest {
             Callable<Integer> trancheA = () -> disburse(mockMvc, reference, "CONCURRENCY-TRANCHE-A", barrier);
             Callable<Integer> trancheB = () -> disburse(mockMvc, reference, "CONCURRENCY-TRANCHE-B", barrier);
 
-            Future<Integer> resultA = executor.submit(trancheA);
-            Future<Integer> resultB = executor.submit(trancheB);
+            Future<Integer> resultA = executor.submit(new DelegatingSecurityContextCallable<>(trancheA));
+            Future<Integer> resultB = executor.submit(new DelegatingSecurityContextCallable<>(trancheB));
 
             int statusA = resultA.get(10, TimeUnit.SECONDS);
             int statusB = resultB.get(10, TimeUnit.SECONDS);
@@ -107,6 +110,8 @@ class DisbursementConcurrencyTest {
         String offerId = offerJson.split("\"id\":\"")[1].split("\"")[0];
 
         mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"));
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc"));
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc/verify"));
         mockMvc.perform(post("/api/loans/" + reference + "/sanction"));
 
         return reference;

@@ -115,7 +115,9 @@ whatever level their `AppUser` row has." `POST /api/approval-cases/{caseId}/make
 edit the policy/scorecard/matrix rows every downstream decision depends on. Everything else (customer,
 loan, document, kyc, financial, scoring, offer, disbursement endpoints) requires only a valid JWT, no
 specific role — narrower role-gating for those is explicitly deferred rather than inventing a full
-permission matrix nobody asked for yet.
+permission matrix nobody asked for yet. **Superseded (2026-09-30):** state-changing endpoints are now
+MAKER/ADMIN or CHECKER/ADMIN gated, the JWT secret has no default outside the `dev` profile, and the demo
+logins are deactivated outside the `demo` Liquibase context — see [release-review-fixes-plan.md](release-review-fixes-plan.md).
 
 ## Correlation IDs & structured logging
 
@@ -153,7 +155,8 @@ Plus the `@PreAuthorize` additions on the existing approval and admin-config end
 
 ```
 035-create-app-user.sql
-036-seed-demo-users.sql            (admin / officer / manager / maker demo accounts — comment-flagged as demo-only)
+036-seed-demo-users.sql            (admin / officer / manager / maker demo accounts — comment-flagged as demo-only;
+                                    deactivated outside the `demo` context by 043 since 2026-09-30)
 037-create-audit-business-event.sql
 038-create-audit-data-change.sql
 ```

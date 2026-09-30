@@ -1,6 +1,7 @@
 package com.opencredit.platform.financial.dto;
 
 import com.opencredit.platform.financial.model.FinancialLineItemCode;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
@@ -13,5 +14,6 @@ public class FinancialLineItemRequest {
     private FinancialLineItemCode lineItemCode;
 
     @NotNull
+    @Digits(integer = 17, fraction = 2)
     private BigDecimal value;
 }

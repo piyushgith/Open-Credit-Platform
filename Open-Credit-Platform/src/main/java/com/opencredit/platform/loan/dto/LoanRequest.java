@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.opencredit.platform.loan.ProductType;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -36,6 +37,7 @@ public abstract class LoanRequest {
 
     @NotNull
     @DecimalMin(value = "10000.00", message = "requestedAmount must be at least 10000.00")
+    @Digits(integer = 17, fraction = 2)
     private BigDecimal requestedAmount;
 
     @NotNull

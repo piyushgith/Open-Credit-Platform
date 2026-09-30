@@ -1,5 +1,6 @@
 package com.opencredit.platform.offer.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -23,5 +24,6 @@ public class OfferRequest {
     private Integer tenureMonths;
 
     @Positive
+    @Digits(integer = 17, fraction = 2)
     private BigDecimal requestedAmount;
 }

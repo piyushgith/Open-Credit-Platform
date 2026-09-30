@@ -18,7 +18,7 @@ actual design decisions and their rationale, not just what to build.
 - **Java 25, Spring Boot 4.1.1.** Some starter artifact names changed in Boot 4 —
   `spring-boot-starter-webmvc` and `spring-boot-starter-webclient`, not `-web`/`-webflux`.
 - **Liquibase, not Flyway** — despite what `my_docs/plan.md` says. Changesets are plain SQL files
-  under `src/main/resources/db/changelog/changes/`, numbered sequentially (currently up to `040`),
+  under `src/main/resources/db/changelog/changes/`, numbered sequentially (currently up to `044`),
   each registered in `db.changelog-master.yaml`. Never edit a shipped changeset; add a new one.
 - **Jackson 3** (`tools.jackson`, not `com.fasterxml.jackson`) is the app's own serialization
   engine — see `application.properties`. Third-party libraries (e.g. `jjwt-jackson`) still pull in
@@ -79,8 +79,12 @@ actual design decisions and their rationale, not just what to build.
 ```
 cd Open-Credit-Platform
 docker compose up postgres -d      # or point DB_URL/DB_USER/DB_PASSWORD at your own instance
-./mvnw spring-boot:run
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
 ```
+
+Without the `dev` profile, boot fails unless `JWT_SECRET` is set, and changeset `043` deactivates the
+demo logins (they stay active only under the `demo` Liquibase context the `dev` profile selects).
+Tests get their secret and the `demo` context from `src/test/resources/config/application.properties`.
 
 API docs: `http://localhost:8080/swagger-ui.html`. See [`README.md`](README.md) for a full walkthrough
 and [`scripts/development/demo.sh`](scripts/development/demo.sh) for a scripted end-to-end demo.

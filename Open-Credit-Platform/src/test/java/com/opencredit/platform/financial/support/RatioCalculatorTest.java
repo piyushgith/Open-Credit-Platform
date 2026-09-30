@@ -115,6 +115,27 @@ class RatioCalculatorTest {
     }
 
     @Test
+    void negativeEbitdaSkipsDebtToEbitdaInsteadOfReportingLowLeverage() {
+        Map<DerivedFinancialFactCode, BigDecimal> facts = fullFacts();
+        facts.put(DerivedFinancialFactCode.EBITDA, new BigDecimal("-50000.00"));
+
+        Map<FinancialRatioCode, BigDecimal> ratios = calculator.calculate(fullRawValues(), facts);
+
+        assertThat(ratios).doesNotContainKey(FinancialRatioCode.DEBT_TO_EBITDA);
+        assertThat(ratios.get(FinancialRatioCode.EBITDA_MARGIN)).isEqualByComparingTo("-0.0500");
+    }
+
+    @Test
+    void negativeEquitySkipsDebtToEquityInsteadOfReportingLowLeverage() {
+        Map<FinancialLineItemCode, BigDecimal> raw = fullRawValues();
+        raw.put(FinancialLineItemCode.EQUITY, new BigDecimal("-100000"));
+
+        Map<FinancialRatioCode, BigDecimal> ratios = calculator.calculate(raw, fullFacts());
+
+        assertThat(ratios).doesNotContainKey(FinancialRatioCode.DEBT_TO_EQUITY);
+    }
+
+    @Test
     void roundsToFourDecimalPlacesHalfUp() {
         Map<FinancialRatioCode, BigDecimal> ratios = calculator.calculate(fullRawValues(), fullFacts());
 

@@ -10,6 +10,7 @@ import com.opencredit.platform.common.api.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,6 +25,7 @@ import java.util.UUID;
  * editable/deletable through normal APIs" (Week 10 plan) actually means in code.
  */
 @RestController
+@PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
 @RequestMapping("/api/audit")
 @Tag(name = "Audit", description = "Read the business-event and data-change audit trail for one entity")
 public class AuditController {

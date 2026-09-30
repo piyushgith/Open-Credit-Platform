@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -35,6 +36,7 @@ public class LoanController {
         this.loanApplicationService = loanApplicationService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping("/apply")
     @Operation(
             summary = "Apply for a loan",
@@ -48,6 +50,7 @@ public class LoanController {
                 .body(ApiResponse.success("Loan application created", response));
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping("/{reference}/submit")
     @Operation(summary = "Submit a DRAFT application, running underwriting and landing on OFFERED or DECLINED")
     public ResponseEntity<ApiResponse<LoanResponse>> submit(
@@ -56,6 +59,7 @@ public class LoanController {
         return ResponseEntity.ok(ApiResponse.success("Loan application underwritten", response));
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping("/{reference}/underwriting/retry")
     @Operation(summary = "Retry underwriting for an application parked at UNDERWRITING with a REFERRED decision, "
             + "recording a new underwriting attempt")
@@ -64,6 +68,7 @@ public class LoanController {
         return ResponseEntity.ok(ApiResponse.success("Underwriting retried", response));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/{reference}/sanction")
     @Operation(summary = "Sanction an OFFERED application")
     public ResponseEntity<ApiResponse<LoanResponse>> sanction(@PathVariable String reference) {
@@ -71,6 +76,7 @@ public class LoanController {
         return ResponseEntity.ok(ApiResponse.success("Loan application sanctioned", response));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/{reference}/disbursements")
     @Operation(summary = "Record a disbursement tranche against a SANCTIONED application's sanction",
             description = "The application moves to DISBURSED once the running total across every tranche "

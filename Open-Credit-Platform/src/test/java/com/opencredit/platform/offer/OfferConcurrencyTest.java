@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.concurrent.DelegatingSecurityContextCallable;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -28,6 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  * threads, not just sequential calls hitting the same pre-check twice.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@WithMockUser(roles = "ADMIN")
 class OfferConcurrencyTest {
 
     @Autowired
@@ -48,8 +51,8 @@ class OfferConcurrencyTest {
             Callable<Integer> selectFirst = () -> select(mockMvc, reference, offerId1, barrier);
             Callable<Integer> selectSecond = () -> select(mockMvc, reference, offerId2, barrier);
 
-            Future<Integer> resultA = executor.submit(selectFirst);
-            Future<Integer> resultB = executor.submit(selectSecond);
+            Future<Integer> resultA = executor.submit(new DelegatingSecurityContextCallable<>(selectFirst));
+            Future<Integer> resultB = executor.submit(new DelegatingSecurityContextCallable<>(selectSecond));
 
             int statusA = resultA.get(10, TimeUnit.SECONDS);
             int statusB = resultB.get(10, TimeUnit.SECONDS);

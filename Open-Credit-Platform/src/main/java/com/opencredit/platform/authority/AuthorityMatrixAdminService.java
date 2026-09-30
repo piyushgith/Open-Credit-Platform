@@ -1,5 +1,6 @@
 package com.opencredit.platform.authority;
 
+import com.opencredit.platform.audit.AuditService;
 import com.opencredit.platform.authority.dto.AuthorityMatrixEntryRequest;
 import com.opencredit.platform.authority.dto.AuthorityMatrixEntryResponse;
 import com.opencredit.platform.authority.exception.AuthorityMatrixEntryNotFoundException;
@@ -23,10 +24,14 @@ import java.util.UUID;
 @Transactional
 public class AuthorityMatrixAdminService {
 
-    private final AuthorityMatrixEntryRepository entryRepository;
+    private static final String AUDIT_ENTITY = "AuthorityMatrixEntry";
 
-    public AuthorityMatrixAdminService(AuthorityMatrixEntryRepository entryRepository) {
+    private final AuthorityMatrixEntryRepository entryRepository;
+    private final AuditService auditService;
+
+    public AuthorityMatrixAdminService(AuthorityMatrixEntryRepository entryRepository, AuditService auditService) {
         this.entryRepository = entryRepository;
+        this.auditService = auditService;
     }
 
     public AuthorityMatrixEntryResponse create(AuthorityMatrixEntryRequest request) {
@@ -44,6 +49,7 @@ public class AuthorityMatrixAdminService {
                 .createdAt(Instant.now())
                 .build();
         saveGuardingMatchOrder(entry, request.getMatchOrder());
+        auditService.recordDataChange(AUDIT_ENTITY, entry.getId(), "entry", null, describe(entry));
         return toResponse(entry);
     }
 
@@ -60,6 +66,7 @@ public class AuthorityMatrixAdminService {
     public AuthorityMatrixEntryResponse update(UUID entryId, AuthorityMatrixEntryRequest request) {
         AuthorityMatrixEntry entry = getEntity(entryId);
         assertNoActiveMatchOrderConflict(request.getMatchOrder(), request.getActive(), entryId);
+        String before = describe(entry);
 
         entry.setProductType(request.getProductType());
         entry.setRiskGrade(request.getRiskGrade());
@@ -69,11 +76,21 @@ public class AuthorityMatrixAdminService {
         entry.setMatchOrder(request.getMatchOrder());
         entry.setActive(request.getActive());
         saveGuardingMatchOrder(entry, request.getMatchOrder());
+        auditService.recordDataChange(AUDIT_ENTITY, entry.getId(), "entry", before, describe(entry));
         return toResponse(entry);
     }
 
     public void delete(UUID entryId) {
-        entryRepository.delete(getEntity(entryId));
+        AuthorityMatrixEntry entry = getEntity(entryId);
+        entryRepository.delete(entry);
+        auditService.recordDataChange(AUDIT_ENTITY, entry.getId(), "entry", describe(entry), null);
+    }
+
+    private static String describe(AuthorityMatrixEntry entry) {
+        return "productType=" + entry.getProductType() + ", riskGrade=" + entry.getRiskGrade()
+                + ", amount=[" + entry.getMinAmount() + ", " + entry.getMaxAmount() + "]"
+                + ", requiredLevel=" + entry.getRequiredLevel() + ", matchOrder=" + entry.getMatchOrder()
+                + ", active=" + entry.isActive();
     }
 
     /**

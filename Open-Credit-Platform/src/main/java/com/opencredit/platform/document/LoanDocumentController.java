@@ -7,6 +7,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -28,6 +29,7 @@ public class LoanDocumentController {
         this.loanDocumentService = loanDocumentService;
     }
 
+    @PreAuthorize("hasAnyRole('MAKER', 'ADMIN')")
     @PostMapping
     @Operation(summary = "Attach a document to a loan application")
     public ResponseEntity<ApiResponse<LoanDocumentResponse>> upload(@PathVariable String reference,
@@ -42,6 +44,7 @@ public class LoanDocumentController {
         return ResponseEntity.ok(ApiResponse.success(loanDocumentService.list(reference)));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/{documentId}/verify")
     @Operation(summary = "Mark an uploaded document as verified")
     public ResponseEntity<ApiResponse<LoanDocumentResponse>> verify(@PathVariable String reference,
@@ -49,6 +52,7 @@ public class LoanDocumentController {
         return ResponseEntity.ok(ApiResponse.success(loanDocumentService.verify(reference, documentId)));
     }
 
+    @PreAuthorize("hasAnyRole('CHECKER', 'ADMIN')")
     @PostMapping("/{documentId}/reject")
     @Operation(summary = "Mark an uploaded document as rejected")
     public ResponseEntity<ApiResponse<LoanDocumentResponse>> reject(@PathVariable String reference,

@@ -60,7 +60,11 @@ public class JwtTokenService {
     public Optional<AuthenticatedUser> parseAndValidate(String token) {
         try {
             Claims claims = parse(token);
-            AppRole role = AppRole.valueOf(claims.get(ROLE_CLAIM, String.class));
+            String roleClaim = claims.get(ROLE_CLAIM, String.class);
+            if (roleClaim == null) {
+                return Optional.empty();
+            }
+            AppRole role = AppRole.valueOf(roleClaim);
             String approvalLevelClaim = claims.get(APPROVAL_LEVEL_CLAIM, String.class);
             ApprovalLevel approvalLevel = approvalLevelClaim != null ? ApprovalLevel.valueOf(approvalLevelClaim) : null;
             return Optional.of(new AuthenticatedUser(claims.getSubject(), role, approvalLevel));

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -22,6 +23,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code open_credit} database to exist and be reachable; see my_plan/backend-implementation-plan.md.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@WithMockUser(roles = "ADMIN")
 class LoanApplicationIntegrationTest {
 
     @Autowired
@@ -31,6 +33,11 @@ class LoanApplicationIntegrationTest {
      * Registers a customer with randomly generated email/phone/PAN so repeated runs against
      * a persistent local Postgres (no Testcontainers yet) never collide with prior rows.
      */
+    private void verifyKyc(MockMvc mockMvc, String reference) throws Exception {
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc/verify")).andExpect(status().isOk());
+    }
+
     private String registerCustomer(MockMvc mockMvc) throws Exception {
         String customerJson = """
                 {
@@ -125,6 +132,7 @@ class LoanApplicationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SELECTED"));
 
+        verifyKyc(mockMvc, reference);
         mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SANCTIONED"));
@@ -214,9 +222,42 @@ class LoanApplicationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.decision").value("APPROVED"));
 
+        verifyKyc(mockMvc, reference);
         mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.errors[0].code").value("NO_OFFER_SELECTED"));
+    }
+
+    @Test
+    void sanctionWithoutVerifiedKycIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId);
+
+        mockMvc.perform(post("/api/loans/" + reference + "/submit")).andExpect(status().isOk());
+
+        String offerJson = mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"tenureMonths\": 60}"))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String offerId = offerJson.split("\"id\":\"")[1].split("\"")[0];
+        mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("KYC_NOT_VERIFIED"));
+
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc")).andExpect(status().isOk());
+        mockMvc.perform(post("/api/loans/" + reference + "/kyc/reject")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"remarks\": \"PAN mismatch\"}"))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/loans/" + reference + "/sanction"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("KYC_NOT_VERIFIED"));
     }
 
     @Test
@@ -236,6 +277,7 @@ class LoanApplicationIntegrationTest {
 
         mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
                 .andExpect(status().isOk());
+        verifyKyc(mockMvc, reference);
         mockMvc.perform(post("/api/loans/" + reference + "/sanction")).andExpect(status().isOk());
 
         mockMvc.perform(post("/api/loans/" + reference + "/disbursements")
@@ -262,6 +304,7 @@ class LoanApplicationIntegrationTest {
 
         mockMvc.perform(post("/api/loans/" + reference + "/offers/" + offerId + "/select"))
                 .andExpect(status().isOk());
+        verifyKyc(mockMvc, reference);
         mockMvc.perform(post("/api/loans/" + reference + "/sanction")).andExpect(status().isOk());
 
         mockMvc.perform(post("/api/loans/" + reference + "/disbursements")

@@ -5,6 +5,6 @@ import java.util.UUID;
 public class ScorecardInUseException extends RuntimeException {
 
     public ScorecardInUseException(UUID scorecardId, String reason) {
-        super("Scorecard " + scorecardId + " cannot be deleted: " + reason);
+        super("Scorecard " + scorecardId + " cannot be changed: " + reason);
     }
 }

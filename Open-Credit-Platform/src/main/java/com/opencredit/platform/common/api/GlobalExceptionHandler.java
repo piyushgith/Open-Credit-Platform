@@ -25,6 +25,7 @@ import com.opencredit.platform.decision.exception.CreditRuleNotFoundException;
 import com.opencredit.platform.decision.exception.DuplicateCreditDecisionException;
 import com.opencredit.platform.decision.exception.DuplicateCreditPolicyNameException;
 import com.opencredit.platform.decision.exception.DuplicateCreditRuleFactorException;
+import com.opencredit.platform.decision.exception.EmptyCreditPolicyException;
 import com.opencredit.platform.decision.exception.NoActiveCreditPolicyException;
 import com.opencredit.platform.document.exception.IllegalDocumentTransitionException;
 import com.opencredit.platform.document.exception.LoanDocumentNotFoundException;
@@ -36,6 +37,7 @@ import com.opencredit.platform.kyc.exception.IllegalKycTransitionException;
 import com.opencredit.platform.kyc.exception.KycCaseNotFoundException;
 import com.opencredit.platform.loan.ProductType;
 import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
+import com.opencredit.platform.loan.exception.KycNotVerifiedException;
 import com.opencredit.platform.loan.exception.LoanApplicationNotFoundException;
 import com.opencredit.platform.loan.exception.LoanProductConstraintViolationException;
 import com.opencredit.platform.loan.exception.LoanProductNotFoundException;
@@ -50,6 +52,7 @@ import com.opencredit.platform.offer.exception.SanctionNotFoundException;
 import com.opencredit.platform.scoring.exception.ConcurrentScorecardActivationException;
 import com.opencredit.platform.scoring.exception.DuplicateScoreException;
 import com.opencredit.platform.scoring.exception.DuplicateScorecardNameException;
+import com.opencredit.platform.scoring.exception.EmptyScorecardException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRangeException;
 import com.opencredit.platform.scoring.exception.InvalidScorecardRuleRangeException;
 import com.opencredit.platform.scoring.exception.NoActiveScorecardException;
@@ -66,14 +69,19 @@ import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableEx
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.validation.FieldError;
+import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 import tools.jackson.databind.exc.InvalidTypeIdException;
 
 import java.util.Arrays;
@@ -901,6 +909,96 @@ public class GlobalExceptionHandler {
                 request.getRequestURI()
         );
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(KycNotVerifiedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleKycNotVerified(KycNotVerifiedException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "KYC_NOT_VERIFIED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(EmptyScorecardException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmptyScorecard(EmptyScorecardException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "EMPTY_SCORECARD",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(EmptyCreditPolicyException.class)
+    public ResponseEntity<ApiResponse<Void>> handleEmptyCreditPolicy(EmptyCreditPolicyException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "EMPTY_CREDIT_POLICY",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    /** A database constraint rejected the write (typically a concurrent duplicate); details stay in the server log. */
+    @ExceptionHandler(DataIntegrityViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> handleDataIntegrityViolation(DataIntegrityViolationException ex, HttpServletRequest request) {
+        log.warn("Data integrity violation processing request {}", request.getRequestURI(), ex);
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "DATA_INTEGRITY_CONFLICT",
+                "The request conflicts with existing data",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiResponse<Void>> handleOptimisticLockingFailure(ObjectOptimisticLockingFailureException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.CONFLICT,
+                "CONCURRENT_MODIFICATION",
+                "The resource was modified by a concurrent request; retry",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ApiResponse<Void>> handleArgumentTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.BAD_REQUEST,
+                "INVALID_PARAMETER",
+                "Invalid value for parameter '" + ex.getName() + "'",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNoResourceFound(NoResourceFoundException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.NOT_FOUND,
+                "NOT_FOUND",
+                "No endpoint at this path",
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.failure(error));
+    }
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleMethodNotSupported(HttpRequestMethodNotSupportedException ex, HttpServletRequest request) {
+        ApiError error = ApiError.of(
+                HttpStatus.METHOD_NOT_ALLOWED,
+                "METHOD_NOT_ALLOWED",
+                ex.getMessage(),
+                request.getRequestURI()
+        );
+        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ApiResponse.failure(error));
     }
 
     @ExceptionHandler(Exception.class)

@@ -48,6 +48,18 @@ class CreditPolicyAdminIntegrationTest {
         return prefix + "-" + UUID.randomUUID();
     }
 
+    /** A policy with one rule, so it can be activated. */
+    private String createActivatablePolicy(MockMvc mockMvc, String name) throws Exception {
+        String policyId = createPolicy(mockMvc, name);
+        mockMvc.perform(post("/api/credit-policies/" + policyId + "/rules")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                { "factorCode": "TOTAL_SCORE", "operator": "GTE", "thresholdValue": 0, "severity": "SOFT", "ruleOrder": 1 }
+                                """))
+                .andExpect(status().isCreated());
+        return policyId;
+    }
+
     private String createPolicy(MockMvc mockMvc, String name) throws Exception {
         String requestJson = """
                 { "name": "%s" }
@@ -232,8 +244,8 @@ class CreditPolicyAdminIntegrationTest {
     @Test
     void activatingAPolicyDeactivatesThePreviouslyActiveOneAndOnlyOneSurvives() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String firstId = createPolicy(mockMvc, randomName("TEST_ACTIVATE_1"));
-        String secondId = createPolicy(mockMvc, randomName("TEST_ACTIVATE_2"));
+        String firstId = createActivatablePolicy(mockMvc, randomName("TEST_ACTIVATE_1"));
+        String secondId = createActivatablePolicy(mockMvc, randomName("TEST_ACTIVATE_2"));
 
         try {
             mockMvc.perform(post("/api/credit-policies/" + firstId + "/activate"))
@@ -263,8 +275,8 @@ class CreditPolicyAdminIntegrationTest {
     @Test
     void concurrentlyActivatingTwoDifferentPoliciesLeavesExactlyOneActive() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String firstId = createPolicy(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_1"));
-        String secondId = createPolicy(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_2"));
+        String firstId = createActivatablePolicy(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_1"));
+        String secondId = createActivatablePolicy(mockMvc, randomName("TEST_CONCURRENT_ACTIVATE_2"));
 
         CyclicBarrier barrier = new CyclicBarrier(2);
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -314,9 +326,43 @@ class CreditPolicyAdminIntegrationTest {
     }
 
     @Test
+    void activatingAPolicyWithNoRulesIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String policyId = createPolicy(mockMvc, randomName("TEST_ACTIVATE_EMPTY"));
+
+        mockMvc.perform(post("/api/credit-policies/" + policyId + "/activate"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("EMPTY_CREDIT_POLICY"));
+
+        mockMvc.perform(delete("/api/credit-policies/" + policyId)).andExpect(status().isOk());
+    }
+
+    @Test
+    void changingTheRulesOfTheActivePolicyIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String policyId = createActivatablePolicy(mockMvc, randomName("TEST_CHANGE_ACTIVE"));
+
+        try {
+            mockMvc.perform(post("/api/credit-policies/" + policyId + "/activate"))
+                    .andExpect(status().isOk());
+
+            mockMvc.perform(post("/api/credit-policies/" + policyId + "/rules")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    { "factorCode": "DSCR", "operator": "GTE", "thresholdValue": 1.5, "severity": "HARD", "ruleOrder": 2 }
+                                    """))
+                    .andExpect(status().isConflict())
+                    .andExpect(jsonPath("$.errors[0].code").value("CREDIT_POLICY_IN_USE"));
+        } finally {
+            reactivateSeededPolicy(mockMvc);
+            mockMvc.perform(delete("/api/credit-policies/" + policyId)).andExpect(status().isOk());
+        }
+    }
+
+    @Test
     void deletingTheActivePolicyIsRejected() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String policyId = createPolicy(mockMvc, randomName("TEST_DELETE_ACTIVE"));
+        String policyId = createActivatablePolicy(mockMvc, randomName("TEST_DELETE_ACTIVE"));
 
         try {
             mockMvc.perform(post("/api/credit-policies/" + policyId + "/activate"))
@@ -334,7 +380,7 @@ class CreditPolicyAdminIntegrationTest {
     @Test
     void deletingAPolicyAlreadyUsedToDecideAScoreIsRejected() throws Exception {
         MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
-        String policyId = createPolicy(mockMvc, randomName("TEST_DELETE_IN_USE"));
+        String policyId = createActivatablePolicy(mockMvc, randomName("TEST_DELETE_IN_USE"));
 
         try {
             mockMvc.perform(post("/api/credit-policies/" + policyId + "/activate"))

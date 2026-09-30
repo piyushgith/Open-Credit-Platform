@@ -13,6 +13,7 @@ import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.context.WebApplicationContext;
@@ -48,6 +49,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * {@code SecurityContextHolder} entry is still required for these calls to succeed.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.MOCK)
+@WithMockUser(roles = "ADMIN")
 class ApprovalWorkflowIntegrationTest {
 
     @Autowired
@@ -284,6 +286,77 @@ class ApprovalWorkflowIntegrationTest {
                 """.formatted(outcome);
     }
 
+    /**
+     * CURRENT_RATIO=0.5 fails the seeded SOFT rule while TOTAL_SCORE=700 (grade B) passes -> REFER.
+     * At 400,000 the matrix resolves AUTO for grade B, but a REFER must still get a human case.
+     */
+    @Test
+    void referredDecisionOpensACaseEvenWhereTheMatrixWouldAutoApprove() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId, "400000.00");
+        String statementJson = """
+                {
+                  "period": { "periodLabel": "FY2023", "periodType": "AUDITED", "startDate": "2022-04-01", "endDate": "2023-03-31" },
+                  "lineItems": [
+                    { "lineItemCode": "CURRENT_ASSETS", "value": 100000.00 },
+                    { "lineItemCode": "NON_CURRENT_ASSETS", "value": 300000.00 },
+                    { "lineItemCode": "CURRENT_LIABILITIES", "value": 200000.00 },
+                    { "lineItemCode": "NON_CURRENT_LIABILITIES", "value": 150000.00 },
+                    { "lineItemCode": "EQUITY", "value": 400000.00 },
+                    { "lineItemCode": "LONG_TERM_DEBT", "value": 100000.00 },
+                    { "lineItemCode": "SHORT_TERM_DEBT", "value": 50000.00 },
+                    { "lineItemCode": "INVENTORY", "value": 100000.00 },
+                    { "lineItemCode": "REVENUE", "value": 1000000.00 },
+                    { "lineItemCode": "COST_OF_GOODS_SOLD", "value": 600000.00 },
+                    { "lineItemCode": "OPERATING_EXPENSES", "value": 150000.00 },
+                    { "lineItemCode": "DEPRECIATION_AMORTIZATION", "value": 40000.00 },
+                    { "lineItemCode": "INTEREST_EXPENSE", "value": 20000.00 },
+                    { "lineItemCode": "TAX_EXPENSE", "value": 30000.00 }
+                  ]
+                }
+                """;
+        String submitResponseJson = mockMvc.perform(post("/api/loans/" + reference + "/financial-statements")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(statementJson))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        String statementId = submitResponseJson.split("\"id\":\"")[1].split("\"")[0];
+        mockMvc.perform(post("/api/loans/" + reference + "/financial-statements/" + statementId + "/analyze"))
+                .andExpect(status().isOk());
+        String analysisRunId = latestAnalysisRunId(mockMvc, reference, statementId);
+        String scoreId = score(mockMvc, reference, statementId, analysisRunId);
+        String decisionId = decisionId(mockMvc, reference, statementId, analysisRunId, scoreId);
+
+        mockMvc.perform(post("/api/credit-decisions/" + decisionId + "/approval-case"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.requiredLevel").value("SENIOR_CREDIT_MANAGER"))
+                .andExpect(jsonPath("$.data.status").value("PENDING_MAKER"));
+
+        mockMvc.perform(get("/api/loans/" + reference))
+                .andExpect(jsonPath("$.data.status").value("DRAFT"));
+    }
+
+    /** An application the product strategy already finalized must not get a second, conflicting outcome. */
+    @Test
+    void openingACaseForAnAlreadyOfferedApplicationIsRejected() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId, "1500000.00");
+        mockMvc.perform(post("/api/loans/" + reference + "/submit"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("OFFERED"));
+
+        String statementId = submitAndAnalyzeStrongStatement(mockMvc, reference);
+        String analysisRunId = latestAnalysisRunId(mockMvc, reference, statementId);
+        String scoreId = score(mockMvc, reference, statementId, analysisRunId);
+        String decisionId = decisionId(mockMvc, reference, statementId, analysisRunId, scoreId);
+
+        mockMvc.perform(post("/api/credit-decisions/" + decisionId + "/approval-case"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.errors[0].code").value("ILLEGAL_APPLICATION_TRANSITION"));
+    }
+
     /** Amount 1,500,000: over the 500k AUTO ceiling, under the 2M CREDIT_OFFICER ceiling. */
     @Test
     void makerThenSufficientCheckerApprovesTheCase() throws Exception {
@@ -371,6 +444,42 @@ class ApprovalWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.data.interestRate").value(11.5));
     }
 
+    /** Used vehicle, price 500,000, requested 450,000: LTV 0.90 over the 0.70 cap, so the pipeline approves 350,000. */
+    @Test
+    void autoApprovedVehicleLoanKeepsTheLtvCap() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String applyResponseJson = mockMvc.perform(post("/api/loans/apply")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "productType": "VEHICLE",
+                                  "customerId": "%s",
+                                  "requestedAmount": 450000.00,
+                                  "tenureMonths": 48,
+                                  "vehicleMake": "Honda",
+                                  "vehiclePrice": 500000.00,
+                                  "downPayment": 50000.00,
+                                  "condition": "USED"
+                                }
+                                """.formatted(customerId)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+        String reference = applyResponseJson.split("\"applicationReference\":\"")[1].split("\"")[0];
+        String statementId = submitAndAnalyzeStrongStatement(mockMvc, reference);
+        String analysisRunId = latestAnalysisRunId(mockMvc, reference, statementId);
+        String scoreId = score(mockMvc, reference, statementId, analysisRunId);
+        String decisionId = decisionId(mockMvc, reference, statementId, analysisRunId, scoreId);
+
+        mockMvc.perform(post("/api/credit-decisions/" + decisionId + "/approval-case"))
+                .andExpect(jsonPath("$.errors[0].code").value("APPROVAL_NOT_REQUIRED"));
+
+        mockMvc.perform(get("/api/loans/" + reference))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("OFFERED"))
+                .andExpect(jsonPath("$.data.approvedAmount").value(350000.00));
+    }
+
     /** Same wiring point as the AUTO case above, but reached through a full maker-checker approval. */
     @Test
     void checkerApprovalAdvancesTheApplicationToOfferedAndAllowsAnOffer() throws Exception {
@@ -400,6 +509,12 @@ class ApprovalWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("OFFERED"))
                 .andExpect(jsonPath("$.data.decision").value("APPROVED"));
 
+        mockMvc.perform(post("/api/loans/" + reference + "/offers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ \"tenureMonths\": 60 }"))
+                .andExpect(status().isForbidden());
+
+        actAsMaker("alice.maker");
         mockMvc.perform(post("/api/loans/" + reference + "/offers")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{ \"tenureMonths\": 60 }"))

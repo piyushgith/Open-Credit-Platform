@@ -41,6 +41,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -209,8 +210,8 @@ public class FinancialStatementService {
     }
 
     /**
-     * Finds the immediately preceding financial period for the same loan application (by
-     * {@code endDate}, excluding the statement being analyzed) and returns its raw revenue plus
+     * Finds the immediately preceding financial period of the same length in months for the same
+     * loan application (by {@code endDate}, excluding the statement being analyzed) and returns its raw revenue plus
      * its most recent analysis run's EBITDA fact, if any. Empty fields when there is no earlier
      * statement or it has never been analyzed — the two comparative risk indicators then simply
      * aren't evaluated, same as any other missing input.
@@ -227,6 +228,7 @@ public class FinancialStatementService {
         Optional<FinancialStatement> previousStatement = applicationStatements.stream()
                 .filter(other -> !other.getId().equals(statement.getId()))
                 .filter(other -> periodsById.get(other.getPeriodId()).getEndDate().isBefore(currentPeriod.getEndDate()))
+                .filter(other -> lengthInMonths(periodsById.get(other.getPeriodId())) == lengthInMonths(currentPeriod))
                 .max(Comparator.comparing(other -> periodsById.get(other.getPeriodId()).getEndDate()));
 
         if (previousStatement.isEmpty()) {
@@ -249,6 +251,10 @@ public class FinancialStatementService {
                         .findFirst();
 
         return new PreviousPeriodFacts(previousRevenue, previousEbitda);
+    }
+
+    private static long lengthInMonths(FinancialPeriod period) {
+        return ChronoUnit.MONTHS.between(period.getStartDate(), period.getEndDate().plusDays(1));
     }
 
     private void assertValidPeriod(FinancialPeriodRequest period) {
