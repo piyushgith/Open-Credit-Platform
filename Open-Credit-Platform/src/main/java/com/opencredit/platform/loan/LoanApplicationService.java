@@ -12,6 +12,7 @@ import com.opencredit.platform.disbursement.model.DisbursementStatus;
 import com.opencredit.platform.kyc.model.KycCase;
 import com.opencredit.platform.kyc.model.KycStatus;
 import com.opencredit.platform.kyc.repository.KycCaseRepository;
+import com.opencredit.platform.loan.dto.LoanApplicationSummaryResponse;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
 import com.opencredit.platform.loan.dto.PersonalLoanResponse;
@@ -33,6 +34,10 @@ import com.opencredit.platform.underwriting.UnderwritingService;
 import com.opencredit.platform.underwriting.exception.UnderwritingNotRetryableException;
 import com.opencredit.platform.underwriting.model.UnderwritingAttempt;
 import com.opencredit.platform.underwriting.model.UnderwritingAttemptStatus;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -323,6 +328,26 @@ public class LoanApplicationService {
     @Transactional(readOnly = true)
     public LoanResponse getResponse(String referenceNumber) {
         return toResponse(getEntity(referenceNumber));
+    }
+
+    /** Lists applications newest first, optionally filtered by status. Any client-supplied sort is ignored. */
+    @Transactional(readOnly = true)
+    public Page<LoanApplicationSummaryResponse> listApplications(ApplicationStatus status, Pageable pageable) {
+        Pageable newestFirst = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
+                Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("referenceNumber")));
+        Page<LoanApplication> applications = status == null
+                ? repository.findAll(newestFirst)
+                : repository.findAllByStatus(status, newestFirst);
+        return applications.map(application -> LoanApplicationSummaryResponse.builder()
+                .applicationReference(application.getReferenceNumber())
+                .applicantName(application.getApplicantName())
+                .productType(application.getProductType())
+                .requestedAmount(application.getRequestedAmount())
+                .tenureMonths(application.getTenureMonths())
+                .status(application.getStatus())
+                .decision(application.getDecision())
+                .createdAt(application.getCreatedAt())
+                .build());
     }
 
     private LoanApplication getEntity(String referenceNumber) {

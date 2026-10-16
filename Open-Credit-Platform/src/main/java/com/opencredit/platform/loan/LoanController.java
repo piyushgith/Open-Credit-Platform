@@ -3,12 +3,17 @@ package com.opencredit.platform.loan;
 import com.opencredit.platform.common.api.ApiResponse;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheRequest;
 import com.opencredit.platform.disbursement.dto.DisbursementTrancheResponse;
+import com.opencredit.platform.loan.dto.LoanApplicationSummaryResponse;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
+import com.opencredit.platform.loan.model.ApplicationStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PagedModel;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,6 +21,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -85,6 +91,16 @@ public class LoanController {
             @PathVariable String reference, @Valid @RequestBody DisbursementTrancheRequest request) {
         DisbursementTrancheResponse response = loanApplicationService.disburse(reference, request);
         return ResponseEntity.ok(ApiResponse.success("Disbursement tranche recorded", response));
+    }
+
+    @GetMapping
+    @Operation(summary = "List loan applications newest first, optionally filtered by status",
+            description = "Paged with `page` (0-based) and `size` (max 100). Sort order is fixed.")
+    public ResponseEntity<ApiResponse<PagedModel<LoanApplicationSummaryResponse>>> list(
+            @RequestParam(required = false) ApplicationStatus status,
+            @ParameterObject Pageable pageable) {
+        return ResponseEntity.ok(ApiResponse.success(
+                new PagedModel<>(loanApplicationService.listApplications(status, pageable))));
     }
 
     @GetMapping("/{reference}")
