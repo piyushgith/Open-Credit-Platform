@@ -6,6 +6,7 @@ import com.opencredit.platform.disbursement.dto.DisbursementTrancheResponse;
 import com.opencredit.platform.loan.dto.LoanApplicationSummaryResponse;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
+import com.opencredit.platform.loan.dto.LoanStatsResponse;
 import com.opencredit.platform.loan.model.ApplicationStatus;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -94,13 +95,22 @@ public class LoanController {
     }
 
     @GetMapping
-    @Operation(summary = "List loan applications newest first, optionally filtered by status",
-            description = "Paged with `page` (0-based) and `size` (max 100). Sort order is fixed.")
+    @Operation(summary = "List loan applications newest first, optionally filtered by status and search text",
+            description = "`q` matches the reference number or applicant name, case-insensitively. "
+                    + "Paged with `page` (0-based) and `size` (max 100). Sort order is fixed.")
     public ResponseEntity<ApiResponse<PagedModel<LoanApplicationSummaryResponse>>> list(
             @RequestParam(required = false) ApplicationStatus status,
+            @RequestParam(required = false) String q,
             @ParameterObject Pageable pageable) {
         return ResponseEntity.ok(ApiResponse.success(
-                new PagedModel<>(loanApplicationService.listApplications(status, pageable))));
+                new PagedModel<>(loanApplicationService.listApplications(status, q, pageable))));
+    }
+
+    @GetMapping("/stats")
+    @Operation(summary = "Portfolio totals: count and requested value per status, count per product, "
+            + "applications created per UTC day over the last 14 days, and referred applications")
+    public ResponseEntity<ApiResponse<LoanStatsResponse>> stats() {
+        return ResponseEntity.ok(ApiResponse.success(loanApplicationService.stats()));
     }
 
     @GetMapping("/{reference}")

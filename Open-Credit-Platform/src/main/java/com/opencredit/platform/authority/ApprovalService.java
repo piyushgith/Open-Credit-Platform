@@ -4,6 +4,7 @@ import com.opencredit.platform.audit.AuditService;
 import com.opencredit.platform.audit.model.AuditEventType;
 import com.opencredit.platform.authority.dto.ApprovalActionRequest;
 import com.opencredit.platform.authority.dto.ApprovalCaseResponse;
+import com.opencredit.platform.authority.dto.ApprovalCaseSummaryResponse;
 import com.opencredit.platform.authority.dto.ApprovalDecisionResponse;
 import com.opencredit.platform.authority.exception.ApprovalCaseNotFoundException;
 import com.opencredit.platform.authority.exception.ApprovalNotRequiredException;
@@ -43,6 +44,9 @@ import com.opencredit.platform.scoring.repository.ScoreRepository;
 import com.opencredit.platform.security.model.AppRole;
 import com.opencredit.platform.security.support.AuthenticatedUser;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -171,6 +175,13 @@ public class ApprovalService {
 
     public ApprovalCaseResponse recordCheckerDecision(UUID caseId, ApprovalActionRequest request) {
         return recordDecision(caseId, ApprovalRole.CHECKER, request);
+    }
+
+    /** The approval queue, optionally narrowed to one status; oldest case first (sort is fixed). */
+    @Transactional(readOnly = true)
+    public Page<ApprovalCaseSummaryResponse> listCases(ApprovalCaseStatus status, Pageable pageable) {
+        Pageable page = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+        return status == null ? caseRepository.findQueue(page) : caseRepository.findQueueByStatus(status, page);
     }
 
     @Transactional(readOnly = true)

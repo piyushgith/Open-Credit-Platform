@@ -337,6 +337,35 @@ class ApprovalWorkflowIntegrationTest {
                 .andExpect(jsonPath("$.data.status").value("DRAFT"));
     }
 
+    @Test
+    void openCaseAppearsInTheApprovalQueueWithItsApplicationAndLeavesItOnceDecided() throws Exception {
+        MockMvc mockMvc = MockMvcBuilders.webAppContextSetup(webApplicationContext).build();
+        String customerId = registerCustomer(mockMvc);
+        String reference = applyForPersonalLoan(mockMvc, customerId, "1500000.00");
+        String statementId = submitAndAnalyzeStrongStatement(mockMvc, reference);
+        String analysisRunId = latestAnalysisRunId(mockMvc, reference, statementId);
+        String scoreId = score(mockMvc, reference, statementId, analysisRunId);
+        String decisionId = decisionId(mockMvc, reference, statementId, analysisRunId, scoreId);
+        String caseId = openCase(mockMvc, decisionId);
+
+        // Oldest-first and shared with other tests' cases, so page through everything pending.
+        mockMvc.perform(get("/api/approval-cases").param("status", "PENDING_MAKER").param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.id=='" + caseId + "')].applicationReference")
+                        .value(org.hamcrest.Matchers.contains(reference)))
+                .andExpect(jsonPath("$.data.content[?(@.id=='" + caseId + "')].status")
+                        .value(org.hamcrest.Matchers.contains("PENDING_MAKER")));
+
+        mockMvc.perform(get("/api/approval-cases").param("status", "PENDING_CHECKER").param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[?(@.id=='" + caseId + "')]").isEmpty());
+
+        mockMvc.perform(get("/api/approval-cases").param("size", "1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content.length()").value(1))
+                .andExpect(jsonPath("$.data.page.totalElements").isNumber());
+    }
+
     /** An application the product strategy already finalized must not get a second, conflicting outcome. */
     @Test
     void openingACaseForAnAlreadyOfferedApplicationIsRejected() throws Exception {

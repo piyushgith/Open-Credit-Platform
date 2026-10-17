@@ -34,7 +34,10 @@ Customer          POST /api/customers
 Loan products      GET /api/loan-products
                     GET /api/loan-products/{productType}
 
-Loan lifecycle     POST /api/loans/apply
+Loan lifecycle     GET  /api/loans?status=&q=&page=&size=   (newest first; q matches reference or applicant name)
+                    GET  /api/loans/stats                      (counts and requested value per status, per product,
+                                                                created per UTC day for 14 days, referred count)
+                    POST /api/loans/apply
                     POST /api/loans/{reference}/submit
                     POST /api/loans/{reference}/underwriting/retry
                     GET  /api/loans/{reference}
@@ -79,6 +82,7 @@ Authority matrix    POST /api/authority-matrix                      (admin)
 
 Maker-checker       POST /api/credit-decisions/{decisionId}/approval-case
                     GET  /api/credit-decisions/{decisionId}/approval-case
+                    GET  /api/approval-cases?status=&page=&size=       (the approval queue, oldest first, with the application)
                     GET  /api/approval-cases/{caseId}
                     POST /api/approval-cases/{caseId}/maker-decision     (ROLE_MAKER or ROLE_ADMIN)
                     POST /api/approval-cases/{caseId}/checker-decision    (ROLE_CHECKER or ROLE_ADMIN)

@@ -15,6 +15,7 @@ import com.opencredit.platform.kyc.repository.KycCaseRepository;
 import com.opencredit.platform.loan.dto.LoanApplicationSummaryResponse;
 import com.opencredit.platform.loan.dto.LoanRequest;
 import com.opencredit.platform.loan.dto.LoanResponse;
+import com.opencredit.platform.loan.dto.LoanStatsResponse;
 import com.opencredit.platform.loan.dto.PersonalLoanResponse;
 import com.opencredit.platform.loan.dto.VehicleLoanResponse;
 import com.opencredit.platform.loan.exception.IllegalApplicationTransitionException;
@@ -45,6 +46,11 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -330,14 +336,26 @@ public class LoanApplicationService {
         return toResponse(getEntity(referenceNumber));
     }
 
-    /** Lists applications newest first, optionally filtered by status. Any client-supplied sort is ignored. */
+    /**
+     * Lists applications newest first, optionally filtered by status and by a case-insensitive
+     * substring of the reference number or applicant name. Any client-supplied sort is ignored.
+     */
     @Transactional(readOnly = true)
-    public Page<LoanApplicationSummaryResponse> listApplications(ApplicationStatus status, Pageable pageable) {
+    public Page<LoanApplicationSummaryResponse> listApplications(ApplicationStatus status, String query, Pageable pageable) {
         Pageable newestFirst = PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(),
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("referenceNumber")));
-        Page<LoanApplication> applications = status == null
-                ? repository.findAll(newestFirst)
-                : repository.findAllByStatus(status, newestFirst);
+        String term = query == null ? "" : query.trim();
+        Page<LoanApplication> applications;
+        if (term.isEmpty()) {
+            applications = status == null
+                    ? repository.findAll(newestFirst)
+                    : repository.findAllByStatus(status, newestFirst);
+        } else {
+            String pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+            applications = status == null
+                    ? repository.search(pattern, newestFirst)
+                    : repository.searchByStatus(status, pattern, newestFirst);
+        }
         return applications.map(application -> LoanApplicationSummaryResponse.builder()
                 .applicationReference(application.getReferenceNumber())
                 .applicantName(application.getApplicantName())
@@ -348,6 +366,45 @@ public class LoanApplicationService {
                 .decision(application.getDecision())
                 .createdAt(application.getCreatedAt())
                 .build());
+    }
+
+    /** Portfolio totals over every application, aggregated in the database. */
+    @Transactional(readOnly = true)
+    public LoanStatsResponse stats() {
+        Map<ApplicationStatus, LoanStatsResponse.StatusStat> byStatus = new EnumMap<>(ApplicationStatus.class);
+        for (ApplicationStatus status : ApplicationStatus.values()) {
+            byStatus.put(status, new LoanStatsResponse.StatusStat(status, 0, BigDecimal.ZERO));
+        }
+        for (Object[] row : repository.statusTotals()) {
+            ApplicationStatus status = (ApplicationStatus) row[0];
+            byStatus.put(status, new LoanStatsResponse.StatusStat(status, (Long) row[1], (BigDecimal) row[2]));
+        }
+
+        Map<ProductType, Long> byProduct = new EnumMap<>(ProductType.class);
+        for (ProductType type : ProductType.values()) {
+            byProduct.put(type, 0L);
+        }
+        for (Object[] row : repository.productTotals()) {
+            byProduct.put((ProductType) row[0], (Long) row[1]);
+        }
+
+        LocalDate today = LocalDate.now(ZoneOffset.UTC);
+        LocalDate first = today.minusDays(13);
+        Map<LocalDate, Long> perDay = new HashMap<>();
+        for (Object[] row : repository.createdPerUtcDaySince(first.atStartOfDay().toInstant(ZoneOffset.UTC))) {
+            LocalDate day = row[0] instanceof LocalDate d ? d : ((java.sql.Date) row[0]).toLocalDate();
+            perDay.put(day, ((Number) row[1]).longValue());
+        }
+        List<LoanStatsResponse.DayStat> days = first.datesUntil(today.plusDays(1))
+                .map(day -> new LoanStatsResponse.DayStat(day, perDay.getOrDefault(day, 0L)))
+                .toList();
+
+        return new LoanStatsResponse(
+                List.copyOf(byStatus.values()),
+                byProduct.entrySet().stream()
+                        .map(e -> new LoanStatsResponse.ProductStat(e.getKey(), e.getValue())).toList(),
+                days,
+                repository.countByStatusAndDecision(ApplicationStatus.UNDERWRITING, DecisionStatus.REFERRED));
     }
 
     private LoanApplication getEntity(String referenceNumber) {
