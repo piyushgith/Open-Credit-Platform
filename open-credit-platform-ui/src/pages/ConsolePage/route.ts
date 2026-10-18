@@ -5,6 +5,7 @@ export type View =
   | { kind: 'new' }
   | { kind: 'approvals' }
   | { kind: 'search' }
+  | { kind: 'emi' }
   | { kind: 'stage'; status: string }
   | { kind: 'loan'; ref: string }
 
@@ -15,5 +16,6 @@ export function parseConsoleRoute(route: string): View {
   if (m[0] === 'new') return { kind: 'new' }
   if (m[0] === 'approvals') return { kind: 'approvals' }
   if (m[0] === 'search') return { kind: 'search' }
+  if (m[0] === 'emi') return { kind: 'emi' }
   return { kind: 'dashboard' }
 }

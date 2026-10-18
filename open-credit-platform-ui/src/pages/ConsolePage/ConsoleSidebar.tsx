@@ -28,6 +28,7 @@ export default function ConsoleSidebar({ view, session, maker, counts, pending, 
         {maker && link('#/console/new', view.kind === 'new', 'New application')}
         {link('#/console/search', view.kind === 'search', 'Search')}
         {link('#/console/approvals', view.kind === 'approvals', 'Approvals', pending)}
+        {link('#/console/emi', view.kind === 'emi', 'EMI calculator')}
       </ul>
       <p className="side-h">Stages</p>
       <ul>

@@ -5,6 +5,7 @@ import type { Session } from '../../types/session.types'
 import { Dashboard, loadStats } from '../../features/dashboard'
 import { LoanDetail, NewApplication, StageList } from '../../features/loans'
 import { Approvals } from '../../features/approvals'
+import { EmiCalculator } from '../../features/emi'
 import ConsoleSidebar from './ConsoleSidebar'
 import { parseConsoleRoute } from './route'
 
@@ -30,6 +31,7 @@ export default function ConsolePage({ session, route, onLogout }: { session: Ses
           </>
         )}
         {view.kind === 'approvals' && <Approvals />}
+        {view.kind === 'emi' && <EmiCalculator />}
         {view.kind === 'search' && <StageList />}
         {view.kind === 'new' && !maker && <div className="box"><p className="muted">Creating applications needs the MAKER or ADMIN role.</p></div>}
         {view.kind === 'new' && maker && <NewApplication onCreated={(r) => { stats.reload(); location.hash = `#/console/loan/${r}` }} />}

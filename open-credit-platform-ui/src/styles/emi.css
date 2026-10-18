@@ -1,0 +1,13 @@
+/* EMI calculator: only what console.css does not already provide. */
+.emi-range { padding: 0; min-height: 0; height: 6px; accent-color: var(--primary); cursor: pointer; border: 0; }
+.emi-seg { display: inline-flex; align-self: flex-start; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; background: var(--bg); }
+.emi-seg button { min-height: 36px; padding: 0 16px; border: 0; background: none; font: 500 13px var(--font); color: var(--muted); cursor: pointer; transition: background .2s, color .2s; }
+.emi-seg button + button { border-left: 1px solid #cbd5e1; }
+.emi-seg button:hover { background: var(--surface); }
+.emi-seg button[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); font-weight: 600; }
+.box .facts div { min-width: 0; }
+.emi-scroll { overflow-x: auto; }
+.field:has(> .emi-seg.corner) { position: relative; }
+.emi-seg.corner { position: absolute; top: -6px; right: 0; align-self: auto; }
+.emi-seg.corner button { min-height: 28px; padding: 0 12px; font-size: 12px; }
+.emi-currency { display: flex; justify-content: flex-end; margin-bottom: 12px; }
