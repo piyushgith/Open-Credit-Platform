@@ -28,12 +28,15 @@ export default function CodePreview() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: 'alice.maker', password: 'maker123' }),
       })
+      if (!login.ok) {
+        const failure = await login.json().catch(() => ({}))
+        throw new Error(failure.message ?? `Login failed (${login.status})`)
+      }
       const session = await login.json()
-      if (!login.ok) throw new Error(session.message ?? `Login failed (${login.status})`)
       const res = await fetch(`${API}/api/loan-products`, {
         headers: { Authorization: `Bearer ${session.data.token}` },
       })
-      const json = await res.json()
+      const json = res.ok ? await res.json() : await res.json().catch(() => ({ error: res.statusText }))
       setOut(`HTTP ${res.status}\n` + JSON.stringify(json, null, 2))
       setState(res.ok ? 'ok' : 'err')
     } catch (e) {

@@ -24,7 +24,7 @@ const label = (c: string) =>
 
 function StatementForm({ onSubmit, busy }: { onSubmit: (body: unknown) => void; busy: boolean }) {
   const [period, setPeriod] = useState<Period>({ periodLabel: 'FY2024', periodType: 'AUDITED', startDate: '2023-04-01', endDate: '2024-03-31' })
-  const [vals, setVals] = useState<Record<string, string>>(Object.fromEntries(ITEMS.map(([c, , v]) => [c, String(v)])))
+  const [vals, setVals] = useState<Record<string, string>>(() => Object.fromEntries(ITEMS.map(([c, , v]) => [c, String(v)])))
   const submit = (e: FormEvent) => {
     e.preventDefault()
     onSubmit({ period, lineItems: ITEMS.map(([c]) => ({ lineItemCode: c, value: Number(vals[c]) })) })

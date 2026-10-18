@@ -16,14 +16,17 @@ async function load(reference: string, base: Ref[]): Promise<Entry[]> {
   // Decisions and approval cases are found through the assessment chain; both are optional.
   const refs: Ref[] = [...base]
   const chains = await loadChains(reference).catch(() => [])
-  for (const c of chains) {
+  // Approval cases for the different decisions are independent, so look them up together.
+  const cases = await Promise.all(chains.map((c) =>
+    c.decision ? soft<{ id: string }>('GET', `/api/credit-decisions/${c.decision.id}/approval-case`) : null))
+  chains.forEach((c, i) => {
     // The loan response hides the application id; statements expose it as a fallback source.
     if (!refs.some(([t]) => t === 'LoanApplication')) refs.push(['LoanApplication', c.statement.applicationId])
-    if (!c.decision) continue
+    if (!c.decision) return
     refs.push(['CreditDecision', c.decision.id])
-    const kase = await soft<{ id: string }>('GET', `/api/credit-decisions/${c.decision.id}/approval-case`)
+    const kase = cases[i]
     if (kase) refs.push(['ApprovalCase', kase.id])
-  }
+  })
 
   const q = ([t, id]: Ref) => `entityType=${encodeURIComponent(t)}&entityId=${encodeURIComponent(id)}`
   const rows = await Promise.all(

@@ -18,8 +18,8 @@ type Data = Awaited<ReturnType<typeof loadAll>>
 
 async function loadAll(ref: string) {
   const p = `/api/loans/${ref}`
-  const loan = await call<Loan>('GET', p)
-  const [uw, kyc, docs, offers, sanction, disb] = await Promise.all([
+  const [loan, uw, kyc, docs, offers, sanction, disb] = await Promise.all([
+    call<Loan>('GET', p),
     soft<{ applicationId: string; attempts: Attempt[] }>('GET', `${p}/underwriting`),
     soft<Kyc>('GET', `${p}/kyc`),
     soft<Doc[]>('GET', `${p}/documents`),

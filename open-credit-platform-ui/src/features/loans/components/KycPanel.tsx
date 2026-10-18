@@ -8,6 +8,7 @@ export type Kyc = { applicationId?: string; status: string; remarks?: string; cr
 export type Doc = { id: string; applicationId?: string; documentType: string; fileName: string; storageReference: string; status: string; uploadedAt: string }
 
 const TYPES = ['PAN', 'AADHAAR', 'INCOME_PROOF', 'BANK_STATEMENT', 'ADDRESS_PROOF', 'PHOTOGRAPH', 'OTHER']
+const DOC_COLUMNS = ['Type', 'File', 'Status', 'Uploaded']
 const closed = (s: string) => ['DECLINED', 'DISBURSED'].includes(s)
 
 type Props = {
@@ -66,8 +67,13 @@ function KycActions({ path, loanStatus, kyc, busy, act, adding, onToggleAdd }: K
 
 function RejectForm({ path, busy, act }: { path: string; busy: boolean; act: Act }) {
   const [remarks, setRemarks] = useState('')
+  const reject = async (e: FormEvent) => {
+    e.preventDefault()
+    await act('Reject KYC', () => call('POST', `${path}/kyc/reject`, { remarks: remarks || undefined }))
+    setRemarks('')
+  }
   return (
-    <form className="inline" onSubmit={(e) => { e.preventDefault(); void act('Reject KYC', () => call('POST', `${path}/kyc/reject`, { remarks: remarks || undefined })).then(() => setRemarks('')) }}>
+    <form className="inline" onSubmit={(e) => void reject(e)}>
       <Field label="Rejection remarks"><input value={remarks} onChange={(e) => setRemarks(e.target.value)} maxLength={500} /></Field>
       <button type="submit" className="btn sm" disabled={busy}>Reject KYC</button>
     </form>
@@ -93,7 +99,7 @@ function RegisterForm({ path, busy, act, onDone }: { path: string; busy: boolean
           </select>
         </Field>
         <Field label="File name"><input value={form.fileName} onChange={(e) => setForm({ ...form, fileName: e.target.value })} maxLength={255} required /></Field>
-        <Field label="Storage reference"><input value={form.storageReference} placeholder="e.g. s3://bucket/key" onChange={(e) => setForm({ ...form, storageReference: e.target.value })} maxLength={500} required /></Field>
+        <Field label="Storage reference"><input value={form.storageReference} aria-label="Storage reference" placeholder="e.g. s3://bucket/key" onChange={(e) => setForm({ ...form, storageReference: e.target.value })} maxLength={500} required /></Field>
       </div>
       <button type="submit" className="btn primary" disabled={busy}>Register</button>
     </form>
@@ -105,7 +111,7 @@ function DocumentTable({ path, docs, canReview, busy, act }: { path: string; doc
   return (
     <div className="table-wrap">
       <table>
-        <thead><tr><th>Type</th><th>File</th><th>Status</th><th>Uploaded</th><th /></tr></thead>
+        <thead><tr>{DOC_COLUMNS.map((c) => <th key={c}>{c}</th>)}<th /></tr></thead>
         <tbody>
           {docs.map((d) => (
             <tr key={d.id}>
@@ -113,8 +119,8 @@ function DocumentTable({ path, docs, canReview, busy, act }: { path: string; doc
               <td className="row-actions">
                 {canReview && d.status === 'UPLOADED' && (
                   <>
-                    <button type="button" className="btn sm" disabled={busy} onClick={() => act('Verify document', () => call('POST', `${path}/documents/${d.id}/verify`))}>Verify</button>
-                    <button type="button" className="btn sm" disabled={busy} onClick={() => act('Reject document', () => call('POST', `${path}/documents/${d.id}/reject`))}>Reject</button>
+                    <DocAction path={path} id={d.id} verb="verify" busy={busy} act={act} />
+                    <DocAction path={path} id={d.id} verb="reject" busy={busy} act={act} />
                   </>
                 )}
               </td>
@@ -124,4 +130,9 @@ function DocumentTable({ path, docs, canReview, busy, act }: { path: string; doc
       </table>
     </div>
   )
+}
+
+function DocAction({ path, id, verb, busy, act }: { path: string; id: string; verb: 'verify' | 'reject'; busy: boolean; act: Act }) {
+  const name = verb === 'verify' ? 'Verify' : 'Reject'
+  return <button type="button" className="btn sm" disabled={busy} onClick={() => act(`${name} document`, () => call('POST', `${path}/documents/${id}/${verb}`))}>{name}</button>
 }
