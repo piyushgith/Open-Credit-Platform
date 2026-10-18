@@ -37,3 +37,21 @@ export type Disbursement = {
   status: string
   tranches: { trancheNumber: number; amount: number; requestReference: string }[]
 }
+
+export type ApplicationForm = {
+  fullName: string
+  email: string
+  phoneNumber: string
+  dateOfBirth: string
+  panNumber: string
+  productType: string
+  requestedAmount: string
+  tenureMonths: string
+  monthlyIncome: string
+  existingEmi: string
+  employmentType: string
+  vehicleMake: string
+  vehiclePrice: string
+  downPayment: string
+  condition: string
+}

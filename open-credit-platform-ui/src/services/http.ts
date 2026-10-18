@@ -1,4 +1,5 @@
-export const API = import.meta.env.VITE_API_URL ?? 'http://localhost:9000'
+import { API } from '../config/env'
+import type { Envelope } from '../types/api.types'
 
 export class ApiFailure extends Error {
   code?: string
@@ -6,13 +7,6 @@ export class ApiFailure extends Error {
     super(message)
     this.code = code
   }
-}
-
-type Envelope<T> = {
-  status: 'SUCCESS' | 'ERROR'
-  message?: string
-  data?: T
-  errors?: { code?: string; message?: string; fieldErrors?: Record<string, string> }[]
 }
 
 // The token lives in module memory only: a refresh signs the user out rather than

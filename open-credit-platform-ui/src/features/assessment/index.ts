@@ -1,3 +1,3 @@
 export { default as Assessment } from './components/Assessment'
-export { loadChains } from './api'
+export { loadChains } from './services/assessmentService'
 export type { Chain, Decision, Factor, Period, Rule } from './types'

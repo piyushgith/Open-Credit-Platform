@@ -1,3 +1,3 @@
 export { default as Dashboard } from './components/Dashboard'
-export { loadStats } from './api'
-export type { Stats } from './api'
+export { loadStats } from './services/dashboardService'
+export type { Stats } from './services/dashboardService'

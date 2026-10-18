@@ -1,8 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { call } from '../../../services/http'
 import { msg } from '../../../utils/format'
-import { Field } from '../../../components/ui'
-import type { Session } from '../types'
+import { Field } from '../../../components/common'
+import type { Session } from '../../../types/session.types'
+import { login } from '../services/authService'
 
 const DEMO_USERS = [
   ['admin', 'admin123'],
@@ -22,7 +22,7 @@ export default function Login({ onLogin, notice }: { onLogin: (s: Session) => vo
     setBusy(true)
     setError('')
     try {
-      onLogin(await call<Session>('POST', '/api/auth/login', { username, password }))
+      onLogin(await login(username, password))
     } catch (err) {
       setError(msg(err))
     } finally {

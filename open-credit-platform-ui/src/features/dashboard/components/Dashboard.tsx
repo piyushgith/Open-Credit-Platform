@@ -1,7 +1,7 @@
 import { STAGES } from '../../loans'
 import { money } from '../../../utils/format'
-import { Badge } from '../../../components/ui'
-import type { Stats } from '../api'
+import { Badge } from '../../../components/common'
+import type { Stats } from '../services/dashboardService'
 
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`
 const fmt = (n: number) => n.toLocaleString('en-IN')

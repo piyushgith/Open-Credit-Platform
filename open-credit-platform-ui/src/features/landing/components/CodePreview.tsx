@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { API } from '../../../services/http'
+import { API } from '../../../config/env'
 import { IDLE, SNIPPETS, type Lang } from '../content'
 
 export default function CodePreview() {

@@ -1,6 +1,7 @@
-import { CONTROLS, DOCS_URL, FRAMEWORKS, ICONS, REPO } from '../features/landing/content'
-import { CodePreview, Icon, Lifecycle } from '../features/landing'
-
+import { DOCS_URL, REPO } from '../../config/env'
+import { Icon, ICONS } from '../../components/common'
+import { CONTROLS, FRAMEWORKS } from '../../features/landing/content'
+import { CodePreview, Lifecycle } from '../../features/landing'
 export default function LandingPage() {
   return (
     <main id="top">

@@ -1,11 +1,11 @@
 import { useState, type FormEvent, type ReactNode } from 'react'
 import { ApiFailure, call } from '../../../services/http'
 import { dt, msg } from '../../../utils/format'
-import { loadChains } from '../api'
+import { loadChains } from '../services/assessmentService'
 import type { Decision, Factor, Period, Rule } from '../types'
 import { useFetch } from '../../../hooks/useFetch'
-import { Badge, Field } from '../../../components/ui'
-import { useRoles } from '../../auth'
+import { Badge, Field } from '../../../components/common'
+import { useRoles } from '../../../hooks/useRoles'
 
 const ITEMS: [string, string, number][] = [
   ['CURRENT_ASSETS', 'Current assets', 500000], ['NON_CURRENT_ASSETS', 'Non-current assets', 700000],

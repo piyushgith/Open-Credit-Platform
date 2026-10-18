@@ -1,14 +1,14 @@
 import { useState, type FormEvent } from 'react'
-import { call } from '../../../services/http'
 import { money, msg } from '../../../utils/format'
-import { Field } from '../../../components/ui'
+import { Field } from '../../../components/common'
 import { indicativeRate, monthlyEmi } from '../emi'
-import type { Loan } from '../types'
+import { createApplication } from '../services/loanService'
+import type { ApplicationForm } from '../types'
 
 const rnd = (n: number) => String(Math.floor(Math.random() * 10 ** n)).padStart(n, '0')
 
 export default function NewApplication({ onCreated }: { onCreated: (ref: string) => void }) {
-  const [f, setF] = useState({
+  const [f, setF] = useState<ApplicationForm>({
     fullName: 'Asha Verma', email: `asha.${rnd(5)}@example.com`, phoneNumber: `9${rnd(9)}`,
     dateOfBirth: '1992-04-18', panNumber: `DEMOA${rnd(4)}X`,
     productType: 'PERSONAL', requestedAmount: '500000', tenureMonths: '60',
@@ -26,19 +26,7 @@ export default function NewApplication({ onCreated }: { onCreated: (ref: string)
     setBusy(true)
     setError('')
     try {
-      const customer = await call<{ id: string }>('POST', '/api/customers', {
-        fullName: f.fullName, email: f.email, phoneNumber: f.phoneNumber,
-        dateOfBirth: f.dateOfBirth, panNumber: f.panNumber.toUpperCase(),
-      })
-      const base = {
-        productType: f.productType, customerId: customer.id,
-        requestedAmount: Number(f.requestedAmount), tenureMonths: Number(f.tenureMonths),
-      }
-      const body = f.productType === 'PERSONAL'
-        ? { ...base, monthlyIncome: Number(f.monthlyIncome), existingEmi: Number(f.existingEmi), employmentType: f.employmentType }
-        : { ...base, vehicleMake: f.vehicleMake, vehiclePrice: Number(f.vehiclePrice), downPayment: Number(f.downPayment), condition: f.condition }
-      const loan = await call<Loan>('POST', '/api/loans/apply', body)
-      onCreated(loan.applicationReference)
+      onCreated(await createApplication(f))
     } catch (err) {
       setError(msg(err))
     } finally {

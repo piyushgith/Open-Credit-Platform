@@ -110,28 +110,23 @@ All three are covered by integration tests and listed in [`docs/api/api-overview
 
 ```
 src/
-  main.tsx          entry point
-  App.tsx           landing page, header and hash routing (#/console)
-  App.css           landing page styles
-  Console.tsx       login, console shell with sidebar navigation, new application form
-  Dashboard.tsx     KPIs and charts
-  StageList.tsx     paged list for one stage, or the cross-stage search
-  Approvals.tsx     maker–checker queue
-  LoanDetail.tsx    per-application page and its actions
-  KycPanel.tsx      KYC and documents
-  Assessment.tsx    financial statements, analysis, score and decision
-  assessmentData.ts types and loader for the assessment chain
-  ApprovalPanel.tsx approval case and maker/checker decisions
-  AuditTimeline.tsx merged business events and data changes
-  session.ts        session context and role helpers
-  ui.tsx            small shared components (Badge, Card, Field)
-  useFetch.ts       data-loading hook
-  emi.ts            indicative EMI estimate
-  api.ts            fetch wrapper, types, stage definitions and stats loader
-  *.test.ts         unit tests
-  *.css             styles (design tokens in index.css)
-e2e/                Playwright tests
+  main.tsx, App.tsx   entry point and app root
+  routes/             hash routing (AppRoutes) and the sign-in gate (ConsoleGate)
+  pages/              LandingPage, ConsolePage (+ sidebar and console route parser)
+  features/           auth, loans, dashboard, assessment, approvals, audit, landing
+                      (each: components/, services/, types, index.ts public API)
+  components/         common/ (Badge, Card, Facts, Field, Icon) and layout/ (Header, Footer)
+  context/            SessionContext
+  hooks/              useFetch, useRoles
+  services/           http client (fetch wrapper, token handling)
+  config/             env values (API URL, docs URL, repo)
+  types/              shared types (Session, API envelope)
+  utils/              formatting helpers
+  styles/             index.css (design tokens), landing.css, console.css
+e2e/                  Playwright tests
 ```
+
+See [`CLAUDE.md`](CLAUDE.md) for the import rules between these folders.
 
 ## Design notes
 

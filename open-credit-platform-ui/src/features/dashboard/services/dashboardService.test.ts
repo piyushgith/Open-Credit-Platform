@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { loadStats } from './api'
+import { loadStats } from './dashboardService'
 
 type Reply = { status?: number; body?: unknown }
 

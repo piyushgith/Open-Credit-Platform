@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { call } from '../../../services/http'
 import { dt, money } from '../../../utils/format'
 import { useFetch } from '../../../hooks/useFetch'
-import { Badge } from '../../../components/ui'
+import { Badge } from '../../../components/common'
 import { STAGES } from '../stages'
 import type { LoanSummary } from '../types'
 

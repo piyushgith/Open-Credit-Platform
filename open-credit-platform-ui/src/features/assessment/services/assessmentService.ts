@@ -1,5 +1,5 @@
-import { call } from '../../services/http'
-import type { Chain, Decision, Run, Score, Statement } from './types'
+import { call } from '../../../services/http'
+import type { Chain, Decision, Run, Score, Statement } from '../types'
 
 const last = <T,>(xs: T[] | null): T | undefined => (xs && xs.length ? xs[xs.length - 1] : undefined)
 export async function loadChains(ref: string): Promise<Chain[]> {

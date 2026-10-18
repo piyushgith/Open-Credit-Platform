@@ -1,5 +1,5 @@
-import { call } from '../../services/http'
-import type { LoanSummary } from '../loans'
+import { call } from '../../../services/http'
+import type { LoanSummary } from '../../loans'
 
 type ServerStats = {
   byStatus: { status: string; count: number; requestedAmount: number }[]

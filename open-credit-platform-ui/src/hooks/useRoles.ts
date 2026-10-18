@@ -1,7 +1,5 @@
-import { createContext, useContext } from 'react'
-import type { Session } from './types'
-
-export const SessionContext = createContext<Session | null>(null)
+import { useContext } from 'react'
+import { SessionContext } from '../context/SessionContext'
 
 // Mirrors the backend's @PreAuthorize rules: makers prepare and submit, checkers verify, sanction
 // and disburse, and ADMIN can do both. The server remains the authority; this only hides buttons
