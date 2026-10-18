@@ -38,7 +38,7 @@ export default function Login({ onLogin, notice }: { onLogin: (s: Session) => vo
       <Field label="Password"><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required /></Field>
       {notice && <p className="notice" role="status">{notice}</p>}
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
+      <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Signing in…' : 'Sign in'}</button>
       <div className="chips">
         {DEMO_USERS.map(([u, p]) => (
           <button type="button" key={u} className="chip" onClick={() => { setUsername(u); setPassword(p) }}>{u}</button>

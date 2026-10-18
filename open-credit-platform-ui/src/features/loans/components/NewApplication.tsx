@@ -87,7 +87,7 @@ export default function NewApplication({ onCreated }: { onCreated: (ref: string)
         </p>
       )}
       {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create application'}</button>
+      <button type="submit" className="btn primary" disabled={busy}>{busy ? 'Creating…' : 'Create application'}</button>
     </form>
   )
 }

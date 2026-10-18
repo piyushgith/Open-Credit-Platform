@@ -16,7 +16,8 @@ const ITEMS: [string, string, number][] = [
   ['INTEREST_EXPENSE', 'Interest expense', 30000], ['TAX_EXPENSE', 'Tax expense', 100000],
 ]
 
-const num = (n: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 4 }).format(n)
+const NUM = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 4 })
+const num = (n: number) => NUM.format(n)
 const ACRONYMS = new Set(['EBITDA', 'ROA', 'ROE', 'DSCR', 'EMI'])
 const label = (c: string) =>
   c.split('_').map((w, i) => (ACRONYMS.has(w) ? w : i === 0 ? w[0] + w.slice(1).toLowerCase() : w.toLowerCase())).join(' ')
@@ -47,7 +48,7 @@ function StatementForm({ onSubmit, busy }: { onSubmit: (body: unknown) => void; 
           </Field>
         ))}
       </div>
-      <button className="btn primary" disabled={busy}>Submit statement</button>
+      <button type="submit" className="btn primary" disabled={busy}>Submit statement</button>
     </form>
   )
 }
@@ -119,7 +120,7 @@ export default function Assessment({ reference, onChanged, renderDecision }: {
     <div className="assess">
       {!data.length && !adding && <p className="muted">No financial statements for this application.</p>}
       {maker && <div className="actions">
-        <button className="btn" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : 'Add financial statement'}</button>
+        <button type="button" className="btn" onClick={() => setAdding(!adding)}>{adding ? 'Cancel' : 'Add financial statement'}</button>
       </div>}
       {adding && (
         <StatementForm busy={busy} onSubmit={(body) => { void act('Add statement', () => call('POST', p, body)).then(() => setAdding(false)) }} />
@@ -142,9 +143,9 @@ export default function Assessment({ reference, onChanged, renderDecision }: {
             </summary>
 
             {maker && <div className="steps-row">
-              <button className="btn sm" disabled={busy} onClick={() => act('Analyze', () => call('POST', `${base}/analyze`))}>{run ? 'Re-analyze' : 'Analyze'}</button>
-              {run && <button className="btn sm" disabled={busy} onClick={() => act('Score', () => call('POST', `${base}/analysis-runs/${run.id}/score`))}>{score ? 'Re-score' : 'Compute score'}</button>}
-              {score && run && <button className="btn sm primary" disabled={busy} onClick={() => act('Decision', () => call('POST', `${base}/analysis-runs/${run.id}/score/${score.id}/decision`))}>{decision ? 'Re-run decision' : 'Run decision'}</button>}
+              <button type="button" className="btn sm" disabled={busy} onClick={() => act('Analyze', () => call('POST', `${base}/analyze`))}>{run ? 'Re-analyze' : 'Analyze'}</button>
+              {run && <button type="button" className="btn sm" disabled={busy} onClick={() => act('Score', () => call('POST', `${base}/analysis-runs/${run.id}/score`))}>{score ? 'Re-score' : 'Compute score'}</button>}
+              {score && run && <button type="button" className="btn sm primary" disabled={busy} onClick={() => act('Decision', () => call('POST', `${base}/analysis-runs/${run.id}/score/${score.id}/decision`))}>{decision ? 'Re-run decision' : 'Run decision'}</button>}
             </div>}
 
             {run && (

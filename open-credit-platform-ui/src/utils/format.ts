@@ -1,5 +1,6 @@
-export const money = (n?: number) =>
-  n === undefined ? '—' : new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(n)
+const MONEY = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 })
+
+export const money = (n?: number) => (n === undefined ? '—' : MONEY.format(n))
 
 export const msg = (e: unknown) => (e instanceof Error ? e.message : String(e))
 

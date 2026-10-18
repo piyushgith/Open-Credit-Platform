@@ -14,18 +14,10 @@ const SIZE = 20
 export default function StageList({ status }: { status?: string }) {
   const stage = STAGES.find((s) => s.status === status)
   const [page, setPage] = useState(0)
-  const [input, setInput] = useState('')
-  const [term, setTerm] = useState('')
   const [stageFilter, setStageFilter] = useState('')
+  const [input, setInput] = useState('')
+  const term = useDebouncedTerm(input, setPage)
   const effective = status ?? stageFilter
-
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setTerm(input.trim())
-      setPage(0)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [input])
 
   const { data, error, loading } = useFetch(() => {
     const params = new URLSearchParams({ page: String(page), size: String(SIZE) })
@@ -46,15 +38,8 @@ export default function StageList({ status }: { status?: string }) {
           <h2>{stage ? stage.name : 'Search applications'} <span className="count">{data ? total.toLocaleString('en-IN') : ''}</span></h2>
           <p className="muted">{stage ? stage.blurb : 'Find an application in any stage by reference number or applicant name.'}</p>
         </div>
-        <div className="row">
-          {!stage && (
-            <select className="search" aria-label="Stage" value={stageFilter} onChange={(e) => { setStageFilter(e.target.value); setPage(0) }}>
-              <option value="">All stages</option>
-              {STAGES.map((s) => <option key={s.status} value={s.status}>{s.name}</option>)}
-            </select>
-          )}
-          <input className="search" type="search" placeholder="Reference or applicant name" aria-label="Search applications" autoFocus={!stage} value={input} onChange={(e) => setInput(e.target.value)} />
-        </div>
+        <SearchControls showStage={!stage} stageFilter={stageFilter} input={input}
+          onStage={(v) => { setStageFilter(v); setPage(0) }} onInput={setInput} />
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       <div className="table-wrap" aria-busy={loading}>
@@ -72,13 +57,47 @@ export default function StageList({ status }: { status?: string }) {
           </tbody>
         </table>
       </div>
-      {pages > 1 && (
-        <div className="pager">
-          <button className="btn sm" disabled={page === 0 || loading} onClick={() => setPage(page - 1)}>Previous</button>
-          <span className="muted">Page {page + 1} of {pages}</span>
-          <button className="btn sm" disabled={page + 1 >= pages || loading} onClick={() => setPage(page + 1)}>Next</button>
-        </div>
+      <Pager page={page} pages={pages} loading={loading} onPage={setPage} />
+    </div>
+  )
+}
+
+function Pager({ page, pages, loading, onPage }: { page: number; pages: number; loading: boolean; onPage: (p: number) => void }) {
+  if (pages <= 1) return null
+  return (
+    <div className="pager">
+      <button type="button" className="btn sm" disabled={page === 0 || loading} onClick={() => onPage(page - 1)}>Previous</button>
+      <span className="muted">Page {page + 1} of {pages}</span>
+      <button type="button" className="btn sm" disabled={page + 1 >= pages || loading} onClick={() => onPage(page + 1)}>Next</button>
+    </div>
+  )
+}
+
+// Trimmed search term that trails the raw input by 300ms, resetting the page to 0 when it updates.
+function useDebouncedTerm(input: string, setPage: (p: number) => void) {
+  const [term, setTerm] = useState('')
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setTerm(input.trim())
+      setPage(0)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [input, setPage])
+  return term
+}
+
+type SearchControlsProps = { showStage: boolean; stageFilter: string; input: string; onStage: (v: string) => void; onInput: (v: string) => void }
+
+function SearchControls({ showStage, stageFilter, input, onStage, onInput }: SearchControlsProps) {
+  return (
+    <div className="row">
+      {showStage && (
+        <select className="search" aria-label="Stage" value={stageFilter} onChange={(e) => onStage(e.target.value)}>
+          <option value="">All stages</option>
+          {STAGES.map((s) => <option key={s.status} value={s.status}>{s.name}</option>)}
+        </select>
       )}
+      <input className="search" type="search" placeholder="Reference or applicant name" aria-label="Search applications" autoFocus={showStage} value={input} onChange={(e) => onInput(e.target.value)} />
     </div>
   )
 }
