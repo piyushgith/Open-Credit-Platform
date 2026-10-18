@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react'
-import { call, dt, money, STAGES, type LoanSummary } from './api'
-import { useFetch } from './useFetch'
-import { Badge } from './ui'
+import { call } from '../../../services/http'
+import { dt, money } from '../../../utils/format'
+import { useFetch } from '../../../hooks/useFetch'
+import { Badge } from '../../../components/ui'
+import { STAGES } from '../stages'
+import type { LoanSummary } from '../types'
 
 type Page = { content: LoanSummary[]; page: { number: number; totalElements: number; totalPages: number } }
 const SIZE = 20

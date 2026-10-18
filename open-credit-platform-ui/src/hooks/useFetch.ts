@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { msg } from './api'
+import { msg } from '../utils/format'
 
 type State<T> = { key: string; data?: T; error?: string }
 

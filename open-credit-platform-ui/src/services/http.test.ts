@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiFailure, call, loadStats, setToken, setUnauthorizedHandler } from './api'
+import { ApiFailure, call, setToken, setUnauthorizedHandler } from './http'
 
 type Reply = { status?: number; body?: unknown }
 
@@ -77,31 +77,5 @@ describe('call', () => {
     mockFetch({ status: 401, body: { status: 'ERROR', errors: [{ code: 'BAD_CREDENTIALS', message: 'Invalid username or password' }] } })
     await expect(call('POST', '/api/auth/login', {})).rejects.toThrow('Invalid username or password')
     expect(handler).not.toHaveBeenCalled()
-  })
-})
-
-describe('loadStats', () => {
-  it('maps the server stats and recent applications', async () => {
-    mockFetch(
-      {
-        body: {
-          status: 'SUCCESS',
-          data: {
-            byStatus: [{ status: 'DRAFT', count: 3, requestedAmount: 300 }, { status: 'OFFERED', count: 1, requestedAmount: 50 }],
-            byProduct: [{ productType: 'PERSONAL', count: 4 }],
-            createdPerDay: [{ date: '2026-10-18', count: 2 }],
-            referredCount: 5,
-          },
-        },
-      },
-      { body: { status: 'SUCCESS', data: { content: [{ applicationReference: 'LN-1' }] } } },
-    )
-    const s = await loadStats()
-    expect(s.counts).toEqual({ DRAFT: 3, OFFERED: 1 })
-    expect(s.amounts).toEqual({ DRAFT: 300, OFFERED: 50 })
-    expect(s.byProduct).toEqual({ PERSONAL: 4 })
-    expect(s.perDay).toEqual([{ date: '2026-10-18', count: 2 }])
-    expect(s.referred).toBe(5)
-    expect(s.recent.map((l) => l.applicationReference)).toEqual(['LN-1'])
   })
 })

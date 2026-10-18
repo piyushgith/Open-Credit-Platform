@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react'
-import { call, dt } from './api'
-import { useRoles } from './session'
-import { Badge, Facts, Field } from './ui'
+import { call } from '../../../services/http'
+import { dt } from '../../../utils/format'
+import { useRoles } from '../../auth'
+import { Badge, Facts, Field } from '../../../components/ui'
 
 export type Kyc = { applicationId?: string; status: string; remarks?: string; createdAt: string; updatedAt: string }
 export type Doc = { id: string; applicationId?: string; documentType: string; fileName: string; storageReference: string; status: string; uploadedAt: string }

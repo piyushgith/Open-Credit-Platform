@@ -1,12 +1,15 @@
 import { useState } from 'react'
-import { ApiFailure, call, dt, money, msg, soft, STAGES, type Disbursement, type Loan, type Offer } from './api'
-import { useFetch } from './useFetch'
-import { Badge, Card, Facts, Field } from './ui'
-import Assessment from './Assessment'
-import ApprovalPanel from './ApprovalPanel'
-import AuditTimeline from './AuditTimeline'
+import { ApiFailure, call, soft } from '../../../services/http'
+import { dt, money, msg } from '../../../utils/format'
+import { useFetch } from '../../../hooks/useFetch'
+import { Badge, Card, Facts, Field } from '../../../components/ui'
+import { Assessment } from '../../assessment'
+import { ApprovalPanel } from '../../approvals'
+import { AuditTimeline } from '../../audit'
+import { useRoles } from '../../auth'
 import KycPanel, { type Doc, type Kyc } from './KycPanel'
-import { useRoles } from './session'
+import { STAGES } from '../stages'
+import type { Disbursement, Loan, Offer } from '../types'
 
 type Attempt = { id: string; cycleNumber: number; status: string; active: boolean; startedAt: string; completedAt?: string }
 type Sanction = { id: string; sanctionedAmount: number; interestRate: number; tenureMonths: number; monthlyEmi: number; createdAt: string }

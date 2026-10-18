@@ -37,9 +37,9 @@ public class RiskIndicatorEvaluator {
     }
 
     public Map<RiskIndicatorCode, Boolean> evaluate(Map<FinancialRatioCode, BigDecimal> ratios,
-                                                      Map<DerivedFinancialFactCode, BigDecimal> facts,
-                                                      Map<FinancialLineItemCode, BigDecimal> rawValues,
-                                                      PreviousPeriodFacts previousPeriod) {
+                                                    Map<DerivedFinancialFactCode, BigDecimal> facts,
+                                                    Map<FinancialLineItemCode, BigDecimal> rawValues,
+                                                    PreviousPeriodFacts previousPeriod) {
         Map<RiskIndicatorCode, Boolean> indicators = new EnumMap<>(RiskIndicatorCode.class);
 
         compare(rawValues.get(FinancialLineItemCode.REVENUE), previousPeriod.revenue())
@@ -52,11 +52,9 @@ public class RiskIndicatorEvaluator {
         // non-cash expense) — the schema has no cash-flow-statement line items to compute a real
         // operating cash flow from, so this is a deliberate simplification, not the full formula.
         Optional<BigDecimal> netProfit = Optional.ofNullable(facts.get(DerivedFinancialFactCode.NET_PROFIT));
-        Optional<BigDecimal> depreciation =
-                Optional.ofNullable(rawValues.get(FinancialLineItemCode.DEPRECIATION_AMORTIZATION));
+        Optional<BigDecimal> depreciation = Optional.ofNullable(rawValues.get(FinancialLineItemCode.DEPRECIATION_AMORTIZATION));
         if (netProfit.isPresent() && depreciation.isPresent()) {
-            indicators.put(RiskIndicatorCode.NEGATIVE_CASH_FLOW,
-                    netProfit.get().add(depreciation.get()).compareTo(BigDecimal.ZERO) < 0);
+            indicators.put(RiskIndicatorCode.NEGATIVE_CASH_FLOW, netProfit.get().add(depreciation.get()).compareTo(BigDecimal.ZERO) < 0);
         }
 
         threshold(ratios.get(FinancialRatioCode.DEBT_TO_EQUITY), HIGH_LEVERAGE_THRESHOLD, true)

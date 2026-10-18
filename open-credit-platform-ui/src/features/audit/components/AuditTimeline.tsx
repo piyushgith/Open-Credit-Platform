@@ -1,7 +1,8 @@
-import { dt, soft } from './api'
-import { loadChains } from './assessmentData'
-import { useFetch } from './useFetch'
-import { Badge } from './ui'
+import { soft } from '../../../services/http'
+import { dt } from '../../../utils/format'
+import { loadChains } from '../../assessment'
+import { useFetch } from '../../../hooks/useFetch'
+import { Badge } from '../../../components/ui'
 
 type BusinessEvent = { id: string; eventType: string; entityType: string; entityId: string; actorUsername: string; occurredAt: string; details?: string }
 type DataChange = { id: string; entityType: string; entityId: string; field: string; oldValue?: string; newValue?: string; changedBy: string; changedAt: string }
